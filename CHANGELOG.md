@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## v0.2.27 (2026-06-23)
+
+### Fixed
+- **Engine:** Replaced `std::shared_mutex` with lock-free atomic pointer exchange (RCU pattern) in `VelocityEngine` to resolve Logic Pro sleep/wake deadlocks on macOS.
+- **DAW State Integration:** Implemented host display update triggers via `updateHostDisplay()` to ensure DAW projects correctly save/recall the plug-in state when edits are made.
+- **Import/Export:** Fixed profile name synchronization on startup, state restore, and import, and reset the profile dirty baseline on import to avoid incorrect save prompts.
+- **Aftertouch:** Fixed aftertouch curve merging and synchronized Floor/Ceiling inspector slider settings for the active curve target (velocity or aftertouch).
+
 ## v0.2.26 (2026-06-07)
 
 ### Fixed
