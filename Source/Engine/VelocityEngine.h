@@ -10,7 +10,7 @@
 #include <JuceHeader.h>
 #include <array>
 #include <atomic>
-#include <shared_mutex>
+#include <mutex>
 #include <unordered_map>
 
 namespace svc
@@ -30,7 +30,7 @@ struct PadSettings
     AftertouchPadSettings aftertouch;
 };
 
-class VelocityEngine
+class VelocityEngine : public juce::Timer
 {
 public:
     struct NoteKey
@@ -50,7 +50,15 @@ public:
 
     using PadMap = std::unordered_map<NoteKey, PadSettings, NoteKeyHash>;
 
+    struct EngineState
+    {
+        PadMap pads;
+        MidiRoutingProcessor midiRouting;
+        EngineProcessingSettings processingSettings;
+    };
+
     VelocityEngine();
+    ~VelocityEngine() override;
 
     void setSampleRate (double rate) noexcept;
     void setOutputMode (VelocityOutputMode mode) noexcept;
@@ -65,10 +73,10 @@ public:
     PadSettings getPadSettings (int note, int channel) const;
 
     void setMidiRouting (const MidiRoutingSettings& settings);
-    const MidiRoutingSettings& getMidiRouting() const noexcept;
+    MidiRoutingSettings getMidiRouting() const noexcept;
 
     void setProcessingSettings (const EngineProcessingSettings& settings);
-    const EngineProcessingSettings& getProcessingSettings() const noexcept { return processingSettings; }
+    EngineProcessingSettings getProcessingSettings() const noexcept;
 
     void processMidiBuffer (juce::MidiBuffer& buffer, int numSamples);
     const std::vector<std::uint32_t>& getMidi2OutputWords() const noexcept { return midi2OutputWords; }
@@ -82,6 +90,9 @@ public:
     void clearPadHistogram (int note, int channel) noexcept { histogramBank.clearPad (note, channel); }
 
 private:
+    void timerCallback() override;
+    PadSettings resolvePadSettingsState (const EngineState& state, int note, int channel) const;
+
     struct ActiveVoice
     {
         bool sounding = false;
@@ -90,11 +101,12 @@ private:
         int outputChannel = 1;
     };
 
-    PadMap pads;    std::array<ActiveVoice, kMidiNoteChannelSlots> activeVoices {};
+    std::atomic<EngineState*> activeState { nullptr };
+    mutable std::mutex retirementMutex;
+    std::vector<std::unique_ptr<EngineState>> retiredStates;
+
+    std::array<ActiveVoice, kMidiNoteChannelSlots> activeVoices {};
     std::array<std::atomic<int64_t>, kMidiNoteChannelSlots> retriggerLastTimeUs {};
-    MidiRoutingProcessor midiRouting;
-    EngineProcessingSettings processingSettings;
-    mutable std::shared_mutex padMutex;
     mutable juce::Random humanizeRandom;
     VelocityOutputMode outputMode = VelocityOutputMode::autoDetect;
     HitEventFifo hitFifo;
@@ -104,8 +116,8 @@ private:
     double runningTimeSeconds = 0.0;
 
     const PadSettings* findPad (int note, int channel) const;
-    float processNoteVelocity (const PadSettings& pad, float inputNormalized) const;
-    float applyHumanize (float normalized) const;
+    float processNoteVelocity (const PadSettings& pad, float inputNormalized, const EngineProcessingSettings& processing) const;
+    float applyHumanize (float normalized, float humanizeAmount) const;
     int resolveOutputChannel (PadGroup group, int incomingChannel) const;
     VelocityEncoding encodeAndApplyOutput (juce::MidiMessage& message,
                                            float outputNormalized,

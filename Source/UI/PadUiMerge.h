@@ -21,6 +21,8 @@ inline svc::ProfilePad mergePadFromCurveAndInspector (const svc::ProfilePad& cur
     pad.aftertouch.enabled = inspectorPad.aftertouch.enabled;
     pad.curve.setFloor (inspectorPad.curve.getFloor());
     pad.curve.setCeiling (inspectorPad.curve.getCeiling());
+    pad.aftertouch.curve.setFloor (inspectorPad.aftertouch.curve.getFloor());
+    pad.aftertouch.curve.setCeiling (inspectorPad.aftertouch.curve.getCeiling());
     return pad;
 }
 

@@ -47,6 +47,7 @@ public:
     juce::AudioProcessorValueTreeState& getApvts() noexcept { return apvts; }
 
     void applyProfileToEngine();
+    void markStateDirty();
     void syncPadToEngine (const svc::ProfilePad& pad);
     void syncRoutingToEngine();
     void syncOutputModeToEngine();

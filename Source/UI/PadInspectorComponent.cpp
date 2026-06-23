@@ -110,8 +110,9 @@ PadInspectorComponent::PadInspectorComponent()
         if (suppressNotify)
             return;
 
-        currentPad.curve.setFloor (static_cast<float> (floorSlider.getValue() / 127.0));
-        ceilingSlider.setValue (currentPad.curve.getCeiling() * 127.0, juce::dontSendNotification);
+        auto& curve = editingAftertouch ? currentPad.aftertouch.curve : currentPad.curve;
+        curve.setFloor (static_cast<float> (floorSlider.getValue() / 127.0));
+        ceilingSlider.setValue (curve.getCeiling() * 127.0, juce::dontSendNotification);
         notifyChanged();
     };
 
@@ -120,8 +121,9 @@ PadInspectorComponent::PadInspectorComponent()
         if (suppressNotify)
             return;
 
-        currentPad.curve.setCeiling (static_cast<float> (ceilingSlider.getValue() / 127.0));
-        floorSlider.setValue (currentPad.curve.getFloor() * 127.0, juce::dontSendNotification);
+        auto& curve = editingAftertouch ? currentPad.aftertouch.curve : currentPad.curve;
+        curve.setCeiling (static_cast<float> (ceilingSlider.getValue() / 127.0));
+        floorSlider.setValue (curve.getFloor() * 127.0, juce::dontSendNotification);
         notifyChanged();
     };
 
@@ -199,9 +201,16 @@ void PadInspectorComponent::commitEdits()
     finishPadEdit();
 }
 
-void PadInspectorComponent::setAftertouchEditMode (bool editingAftertouch)
+void PadInspectorComponent::setAftertouchEditMode (bool editingAt)
 {
+    editingAftertouch = editingAt;
     editAftertouchButton.setButtonText (editingAftertouch ? "Edit velocity curve" : "Edit AT curve");
+
+    suppressNotify = true;
+    const auto& curve = editingAftertouch ? currentPad.aftertouch.curve : currentPad.curve;
+    floorSlider.setValue (curve.getFloor() * 127.0, juce::dontSendNotification);
+    ceilingSlider.setValue (curve.getCeiling() * 127.0, juce::dontSendNotification);
+    suppressNotify = false;
 }
 
 void PadInspectorComponent::applyTheme()
@@ -246,8 +255,9 @@ void PadInspectorComponent::setPad (const svc::ProfilePad& pad, int padIndex)
     gateModeBox.setSelectedId (pad.gateMode == svc::VelocityGateMode::clampToFloor ? 2 : 1, juce::dontSendNotification);
     velocityGateSlider.setValue (pad.velocityGate * 127.0, juce::dontSendNotification);
     retriggerSlider.setValue (pad.retriggerGuardMs, juce::dontSendNotification);
-    floorSlider.setValue (pad.curve.getFloor() * 127.0, juce::dontSendNotification);
-    ceilingSlider.setValue (pad.curve.getCeiling() * 127.0, juce::dontSendNotification);
+    const auto& curve = editingAftertouch ? currentPad.aftertouch.curve : currentPad.curve;
+    floorSlider.setValue (curve.getFloor() * 127.0, juce::dontSendNotification);
+    ceilingSlider.setValue (curve.getCeiling() * 127.0, juce::dontSendNotification);
     suppressNotify = false;
     refreshScrollbar();
 }

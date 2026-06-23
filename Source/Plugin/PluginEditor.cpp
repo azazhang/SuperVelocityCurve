@@ -30,6 +30,7 @@ juce::String padMutationMessage (svc::PadMutationResult result)
 
 void SuperVelocityCurveAudioProcessorEditor::syncFromProcessorState()
 {
+    profileNameEditor.setText (audioProcessor.getProfileStore().getActiveProfile().getName(), juce::dontSendNotification);
     rebuildProfileList();
     refreshPadUI();
     refreshRoutingPanels();
@@ -159,6 +160,7 @@ SuperVelocityCurveAudioProcessorEditor::SuperVelocityCurveAudioProcessorEditor (
         onPadSelected (newIndex);
         padGrid.scrollPadIntoView (newIndex);
         showStatus ("Pad added.");
+        audioProcessor.markStateDirty();
     };
 
     padGrid.onDeletePadRequested = [this]
@@ -186,6 +188,7 @@ SuperVelocityCurveAudioProcessorEditor::SuperVelocityCurveAudioProcessorEditor (
                                           static_cast<int> (store.getActiveProfile().getPads().size()) - 1);
         onPadSelected (juce::jmax (0, newIndex));
         showStatus ("Pad deleted.");
+        audioProcessor.markStateDirty();
     };
     curveEditor.onPadChanged = [this] (const svc::ProfilePad& pad)
     {
@@ -311,6 +314,7 @@ SuperVelocityCurveAudioProcessorEditor::SuperVelocityCurveAudioProcessorEditor (
         applyProfileToEngine();
         refreshPadUI();
         showStatus ("Pasted curve to " + juce::String (count) + " pads in group " + svc::padGroupToString (group));
+        audioProcessor.markStateDirty();
     };
 
     captureAbButton.onClick = [this]
@@ -348,6 +352,7 @@ SuperVelocityCurveAudioProcessorEditor::SuperVelocityCurveAudioProcessorEditor (
         audioProcessor.getProfileStore().syncActiveUserProfileFromEdits();
         audioProcessor.syncRoutingToEngine();
         refreshRoutingPanels();
+        audioProcessor.markStateDirty();
     };
 
     noteRemapEditor.onRemapsChanged = [this]
@@ -355,6 +360,7 @@ SuperVelocityCurveAudioProcessorEditor::SuperVelocityCurveAudioProcessorEditor (
         audioProcessor.getProfileStore().syncActiveUserProfileFromEdits();
         audioProcessor.syncRoutingToEngine();
         refreshRoutingPanels();
+        audioProcessor.markStateDirty();
     };
 
     saveProfileButton.onClick = [this]
@@ -417,10 +423,12 @@ SuperVelocityCurveAudioProcessorEditor::SuperVelocityCurveAudioProcessorEditor (
                                   if (file.existsAsFile()
                                       && audioProcessor.getProfileStore().importProfileFromFile (file, &importError))
                                   {
+                                      profileNameEditor.setText (audioProcessor.getProfileStore().getActiveProfile().getName(), juce::dontSendNotification);
                                       rebuildProfileList();
                                       refreshRoutingPanels();
                                       onPadSelected (0);
                                       applyProfileToEngine();
+                                      captureProfileBaseline();
                                       showStatus ("Imported " + file.getFileName());
                                   }
                                   else if (file != juce::File())
@@ -458,6 +466,7 @@ SuperVelocityCurveAudioProcessorEditor::SuperVelocityCurveAudioProcessorEditor (
         rebuildProfileList();
         refreshPadUI();
         refreshRoutingPanels();
+        audioProcessor.markStateDirty();
     };
 
     juce::Timer::callAfterDelay (1, [safe = juce::Component::SafePointer<SuperVelocityCurveAudioProcessorEditor> (this)]
@@ -474,6 +483,7 @@ void SuperVelocityCurveAudioProcessorEditor::finishEditorStartup()
 
     editorStartupComplete = true;
     applyThemeFromUI();
+    profileNameEditor.setText (audioProcessor.getProfileStore().getActiveProfile().getName(), juce::dontSendNotification);
     rebuildProfileList();
     refreshRoutingPanels();
 
@@ -1023,6 +1033,7 @@ bool SuperVelocityCurveAudioProcessorEditor::tryUpdateSelectedPadFromUI (int pad
 
     audioProcessor.getProfileStore().syncActiveUserProfileFromEdits();
     padGrid.updatePad (padIndex, pad);
+    audioProcessor.markStateDirty();
 
     if (syncEngine)
     {

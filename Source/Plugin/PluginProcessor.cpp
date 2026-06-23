@@ -74,6 +74,11 @@ void SuperVelocityCurveAudioProcessor::applyProfileToEngine()
     profileStore.applyActiveToEngine (engine);
 }
 
+void SuperVelocityCurveAudioProcessor::markStateDirty()
+{
+    updateHostDisplay();
+}
+
 void SuperVelocityCurveAudioProcessor::syncPadToEngine (const svc::ProfilePad& pad)
 {
     engine.setPadSettings (pad.midiNote, pad.midiChannel, svc::ControllerProfile::toEngineSettings (pad));

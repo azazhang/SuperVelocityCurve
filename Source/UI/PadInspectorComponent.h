@@ -68,4 +68,5 @@ private:
     void refreshScrollbar();
 
     bool suppressNotify = false;
+    bool editingAftertouch = false;
 };

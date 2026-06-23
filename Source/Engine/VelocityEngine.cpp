@@ -7,6 +7,25 @@ namespace svc
 VelocityEngine::VelocityEngine()
 {
     clearVoiceState();
+    auto initialState = std::make_unique<EngineState>();
+    activeState.store (initialState.release(), std::memory_order_release);
+    startTimer (1000);
+}
+
+VelocityEngine::~VelocityEngine()
+{
+    stopTimer();
+    if (auto* state = activeState.load (std::memory_order_acquire))
+        delete state;
+
+    const std::lock_guard<std::mutex> lock (retirementMutex);
+    retiredStates.clear();
+}
+
+void VelocityEngine::timerCallback()
+{
+    const std::lock_guard<std::mutex> lock (retirementMutex);
+    retiredStates.clear();
 }
 
 void VelocityEngine::setSampleRate (double rate) noexcept
@@ -21,18 +40,43 @@ void VelocityEngine::setOutputMode (VelocityOutputMode mode) noexcept
 
 void VelocityEngine::clearAllPads()
 {
-    const std::unique_lock lock (padMutex);
-    pads.clear();
-    midiRouting.clearAftertouchSettings();
+    auto newState = std::make_unique<EngineState>();
+    if (auto* current = activeState.load (std::memory_order_acquire))
+    {
+        newState->processingSettings = current->processingSettings;
+        newState->midiRouting = current->midiRouting;
+    }
+    newState->pads.clear();
+    newState->midiRouting.clearAftertouchSettings();
+
+    auto* oldState = activeState.exchange (newState.release(), std::memory_order_acq_rel);
+    if (oldState != nullptr)
+    {
+        const std::lock_guard<std::mutex> lock (retirementMutex);
+        retiredStates.push_back (std::unique_ptr<EngineState> (oldState));
+    }
+
     clearVoiceState();
 }
 
 void VelocityEngine::setPadSettings (int note, int channel, const PadSettings& settings)
 {
-    const std::unique_lock lock (padMutex);
-    pads[{ note, channel }] = settings;
+    auto newState = std::make_unique<EngineState>();
+    if (auto* current = activeState.load (std::memory_order_acquire))
+        *newState = *current;
+
+    newState->pads[{ note, channel }] = settings;
     if (settings.aftertouch.enabled)
-        midiRouting.setAftertouchSettings (note, channel, settings.aftertouch);
+        newState->midiRouting.setAftertouchSettings (note, channel, settings.aftertouch);
+    else
+        newState->midiRouting.setAftertouchSettings (note, channel, AftertouchPadSettings{});
+
+    auto* oldState = activeState.exchange (newState.release(), std::memory_order_acq_rel);
+    if (oldState != nullptr)
+    {
+        const std::lock_guard<std::mutex> lock (retirementMutex);
+        retiredStates.push_back (std::unique_ptr<EngineState> (oldState));
+    }
 }
 
 void VelocityEngine::applyProfileState (const MidiRoutingSettings& routing,
@@ -40,18 +84,25 @@ void VelocityEngine::applyProfileState (const MidiRoutingSettings& routing,
                                         const PadMap& newPads,
                                         const bool resetVoices)
 {
-    const std::unique_lock lock (padMutex);
-    midiRouting.setSettings (routing);
-    processingSettings = processing;
-    pads = newPads;
+    auto newState = std::make_unique<EngineState>();
+    newState->midiRouting.setSettings (routing);
+    newState->processingSettings = processing;
+    newState->pads = newPads;
 
-    midiRouting.clearAftertouchSettings();
-    for (const auto& entry : pads)
+    newState->midiRouting.clearAftertouchSettings();
+    for (const auto& entry : newState->pads)
     {
         if (entry.second.aftertouch.enabled)
-            midiRouting.setAftertouchSettings (entry.first.note,
-                                               entry.first.channel,
-                                               entry.second.aftertouch);
+            newState->midiRouting.setAftertouchSettings (entry.first.note,
+                                                       entry.first.channel,
+                                                       entry.second.aftertouch);
+    }
+
+    auto* oldState = activeState.exchange (newState.release(), std::memory_order_acq_rel);
+    if (oldState != nullptr)
+    {
+        const std::lock_guard<std::mutex> lock (retirementMutex);
+        retiredStates.push_back (std::unique_ptr<EngineState> (oldState));
     }
 
     if (resetVoices)
@@ -60,11 +111,9 @@ void VelocityEngine::applyProfileState (const MidiRoutingSettings& routing,
 
 PadSettings VelocityEngine::getPadSettings (int note, int channel) const
 {
-    const std::shared_lock lock (padMutex);
-    const NoteKey key { note, channel };
-    const auto it = pads.find (key);
-    if (it != pads.end())
-        return it->second;
+    auto* state = activeState.load (std::memory_order_acquire);
+    if (state != nullptr)
+        return resolvePadSettingsState (*state, note, channel);
 
     PadSettings defaults;
     defaults.midiNote = note;
@@ -75,19 +124,46 @@ PadSettings VelocityEngine::getPadSettings (int note, int channel) const
 
 void VelocityEngine::setMidiRouting (const MidiRoutingSettings& settings)
 {
-    const std::unique_lock lock (padMutex);
-    midiRouting.setSettings (settings);
+    auto newState = std::make_unique<EngineState>();
+    if (auto* current = activeState.load (std::memory_order_acquire))
+        *newState = *current;
+
+    newState->midiRouting.setSettings (settings);
+
+    auto* oldState = activeState.exchange (newState.release(), std::memory_order_acq_rel);
+    if (oldState != nullptr)
+    {
+        const std::lock_guard<std::mutex> lock (retirementMutex);
+        retiredStates.push_back (std::unique_ptr<EngineState> (oldState));
+    }
 }
 
-const MidiRoutingSettings& VelocityEngine::getMidiRouting() const noexcept
+MidiRoutingSettings VelocityEngine::getMidiRouting() const noexcept
 {
-    return midiRouting.getSettings();
+    auto* state = activeState.load (std::memory_order_acquire);
+    return state != nullptr ? state->midiRouting.getSettings() : MidiRoutingSettings{};
 }
 
 void VelocityEngine::setProcessingSettings (const EngineProcessingSettings& settings)
 {
-    const std::unique_lock lock (padMutex);
-    processingSettings = settings;
+    auto newState = std::make_unique<EngineState>();
+    if (auto* current = activeState.load (std::memory_order_acquire))
+        *newState = *current;
+
+    newState->processingSettings = settings;
+
+    auto* oldState = activeState.exchange (newState.release(), std::memory_order_acq_rel);
+    if (oldState != nullptr)
+    {
+        const std::lock_guard<std::mutex> lock (retirementMutex);
+        retiredStates.push_back (std::unique_ptr<EngineState> (oldState));
+    }
+}
+
+EngineProcessingSettings VelocityEngine::getProcessingSettings() const noexcept
+{
+    auto* state = activeState.load (std::memory_order_acquire);
+    return state != nullptr ? state->processingSettings : EngineProcessingSettings{};
 }
 
 HistogramSnapshot VelocityEngine::getGlobalHistogramSnapshot() const
@@ -102,15 +178,33 @@ HistogramSnapshot VelocityEngine::getPadHistogramSnapshot (int note, int channel
 
 const PadSettings* VelocityEngine::findPad (int note, int channel) const
 {
+    auto* state = activeState.load (std::memory_order_acquire);
+    if (state == nullptr)
+        return nullptr;
     const NoteKey key { note, channel };
-    const auto it = pads.find (key);
-    return it != pads.end() ? &it->second : nullptr;
+    const auto it = state->pads.find (key);
+    return it != state->pads.end() ? &it->second : nullptr;
 }
 
 PadSettings VelocityEngine::resolvePadSettings (int note, int channel) const
 {
-    if (const auto* pad = findPad (note, channel))
-        return *pad;
+    auto* state = activeState.load (std::memory_order_acquire);
+    if (state != nullptr)
+        return resolvePadSettingsState (*state, note, channel);
+
+    PadSettings defaults;
+    defaults.midiNote = note;
+    defaults.midiChannel = channel;
+    defaults.name = "Note " + juce::String (note);
+    return defaults;
+}
+
+PadSettings VelocityEngine::resolvePadSettingsState (const EngineState& state, int note, int channel) const
+{
+    const NoteKey key { note, channel };
+    const auto it = state.pads.find (key);
+    if (it != state.pads.end())
+        return it->second;
 
     PadSettings defaults;
     defaults.midiNote = note;
@@ -152,7 +246,7 @@ bool VelocityEngine::shouldDropRetrigger (const PadSettings& pad,
     return (eventUs - lastUs) < static_cast<int64_t> (pad.retriggerGuardMs * 1000.0);
 }
 
-float VelocityEngine::processNoteVelocity (const PadSettings& pad, float inputNormalized) const
+float VelocityEngine::processNoteVelocity (const PadSettings& pad, float inputNormalized, const EngineProcessingSettings& processing) const
 {
     if (! pad.enabled)
         return inputNormalized;
@@ -166,14 +260,14 @@ float VelocityEngine::processNoteVelocity (const PadSettings& pad, float inputNo
 
     auto output = pad.curve.mapNormalized (inputNormalized);
     output = applyLibraryCompensation (output,
-                                       processingSettings.libraryPreset,
-                                       processingSettings.libraryBlend);
-    return applyHumanize (output);
+                                       processing.libraryPreset,
+                                       processing.libraryBlend);
+    return applyHumanize (output, processing.humanizeAmount);
 }
 
-float VelocityEngine::applyHumanize (float normalized) const
+float VelocityEngine::applyHumanize (float normalized, float humanizeAmount) const
 {
-    const auto amount = std::clamp (processingSettings.humanizeAmount, 0.0f, 0.25f);
+    const auto amount = std::clamp (humanizeAmount, 0.0f, 0.25f);
     if (amount <= 0.0f)
         return normalized;
 
@@ -184,14 +278,15 @@ float VelocityEngine::applyHumanize (float normalized) const
 
 int VelocityEngine::resolveOutputChannel (PadGroup group, int incomingChannel) const
 {
-    if (! processingSettings.zoneRouting.enabled)
+    auto* state = activeState.load (std::memory_order_acquire);
+    if (state == nullptr || ! state->processingSettings.zoneRouting.enabled)
         return incomingChannel;
 
     const auto groupIndex = static_cast<size_t> (group);
-    if (groupIndex >= processingSettings.zoneRouting.groupOutputChannel.size())
+    if (groupIndex >= state->processingSettings.zoneRouting.groupOutputChannel.size())
         return incomingChannel;
 
-    const auto overrideChannel = processingSettings.zoneRouting.groupOutputChannel[groupIndex];
+    const auto overrideChannel = state->processingSettings.zoneRouting.groupOutputChannel[groupIndex];
     return overrideChannel > 0 ? overrideChannel : incomingChannel;
 }
 
@@ -210,7 +305,9 @@ void VelocityEngine::processMidiBuffer (juce::MidiBuffer& buffer, int numSamples
     juce::MidiBuffer processed;
     const auto blockDurationSeconds = static_cast<double> (numSamples) / sampleRate;
 
-    std::shared_lock lock (padMutex);
+    auto* state = activeState.load (std::memory_order_acquire);
+    if (state == nullptr)
+        return;
 
     for (const auto metadata : buffer)
     {
@@ -226,7 +323,7 @@ void VelocityEngine::processMidiBuffer (juce::MidiBuffer& buffer, int numSamples
             physicalChannel = message.getChannel();
         }
 
-        if (! midiRouting.processMessage (message))
+        if (! state->midiRouting.processMessage (message))
             continue;
 
         const auto note = message.getNoteNumber();
@@ -237,12 +334,12 @@ void VelocityEngine::processMidiBuffer (juce::MidiBuffer& buffer, int numSamples
         {
             const auto inputNormalized = decodeInputFromMidi1 (message.getVelocity());
             const bool inputIsMidi2 = false;
-            const auto settings = resolvePadSettings (physicalNote, physicalChannel);
+            const auto settings = resolvePadSettingsState (*state, physicalNote, physicalChannel);
 
             if (shouldDropRetrigger (settings, physicalNote, physicalChannel, eventTime))
                 continue;
 
-            const auto outputNormalized = processNoteVelocity (settings, inputNormalized);
+            const auto outputNormalized = processNoteVelocity (settings, inputNormalized, state->processingSettings);
             if (outputNormalized < 0.0f)
             {
                 if (! activeVoices[slot].sounding)
@@ -264,7 +361,7 @@ void VelocityEngine::processMidiBuffer (juce::MidiBuffer& buffer, int numSamples
             voice.outputNote = note;
             voice.outputChannel = channel;
 
-            if (processingSettings.zoneRouting.enabled)
+            if (state->processingSettings.zoneRouting.enabled)
             {
                 voice.outputChannel = resolveOutputChannel (settings.group, channel);
                 message.setChannel (voice.outputChannel);
@@ -306,9 +403,9 @@ void VelocityEngine::processMidiBuffer (juce::MidiBuffer& buffer, int numSamples
                 message.setNoteNumber (voice.outputNote);
                 voice.sounding = false;
             }
-            else if (processingSettings.zoneRouting.enabled)
+            else if (state->processingSettings.zoneRouting.enabled)
             {
-                const auto settings = resolvePadSettings (physicalNote, physicalChannel);
+                const auto settings = resolvePadSettingsState (*state, physicalNote, physicalChannel);
                 message.setChannel (resolveOutputChannel (settings.group, channel));
             }
 
@@ -319,7 +416,7 @@ void VelocityEngine::processMidiBuffer (juce::MidiBuffer& buffer, int numSamples
             continue;
         }
 
-        if (message.isAftertouch() && processingSettings.zoneRouting.enabled)
+        if (message.isAftertouch() && state->processingSettings.zoneRouting.enabled)
         {
             auto& voice = activeVoices[slot];
             if (voice.sounding)
@@ -328,7 +425,7 @@ void VelocityEngine::processMidiBuffer (juce::MidiBuffer& buffer, int numSamples
             {
                 const auto atNote = physicalNote >= 0 ? physicalNote : note;
                 const auto atChannel = physicalNote >= 0 ? physicalChannel : channel;
-                const auto settings = resolvePadSettings (atNote, atChannel);
+                const auto settings = resolvePadSettingsState (*state, atNote, atChannel);
                 message.setChannel (resolveOutputChannel (settings.group, channel));
             }
         }
@@ -336,7 +433,6 @@ void VelocityEngine::processMidiBuffer (juce::MidiBuffer& buffer, int numSamples
         processed.addEvent (message, sampleOffset);
     }
 
-    lock.unlock();
     buffer.swapWith (processed);
     runningTimeSeconds += blockDurationSeconds;
 }

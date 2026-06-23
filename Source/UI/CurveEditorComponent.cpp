@@ -172,17 +172,19 @@ void CurveEditorComponent::resetCurve()
 
 void CurveEditorComponent::copyFrom (const svc::VelocityCurve& other)
 {
-    currentPad.curve.setControlPoints (other.getControlPoints());
-    currentPad.curve.setFloor (other.getFloor());
-    currentPad.curve.setCeiling (other.getCeiling());
+    auto& curve = activeCurve();
+    curve.setControlPoints (other.getControlPoints());
+    curve.setFloor (other.getFloor());
+    curve.setCeiling (other.getCeiling());
     notifyChanged();
     repaint();
 }
 
 void CurveEditorComponent::setFloorCeiling (float floor, float ceiling)
 {
-    currentPad.curve.setFloor (floor);
-    currentPad.curve.setCeiling (ceiling);
+    auto& curve = activeCurve();
+    curve.setFloor (floor);
+    curve.setCeiling (ceiling);
     notifyChanged();
     repaint();
 }
