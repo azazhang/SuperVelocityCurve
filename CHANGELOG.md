@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v0.2.28 (2026-06-24)
+
+### Fixed
+- **UI:** Fixed a critical bug where the UI would not respond for the first 10 seconds when opened. This was caused by `juce::Timer` being initialized on background thread instantiation inside `VelocityEngine`; resolved by refactoring state cleanup to use `juce::MessageManager::callAsync`.
+
 ## v0.2.27 (2026-06-23)
 
 ### Fixed

@@ -4,28 +4,28 @@
 namespace svc
 {
 
+static void retireState (VelocityEngine::EngineState* oldState)
+{
+    if (oldState != nullptr)
+    {
+        if (juce::MessageManager::getInstanceWithoutCreating() != nullptr)
+            juce::MessageManager::callAsync ([oldState] { delete oldState; });
+        else
+            delete oldState;
+    }
+}
+
 VelocityEngine::VelocityEngine()
 {
     clearVoiceState();
     auto initialState = std::make_unique<EngineState>();
     activeState.store (initialState.release(), std::memory_order_release);
-    startTimer (1000);
 }
 
 VelocityEngine::~VelocityEngine()
 {
-    stopTimer();
     if (auto* state = activeState.load (std::memory_order_acquire))
         delete state;
-
-    const std::lock_guard<std::mutex> lock (retirementMutex);
-    retiredStates.clear();
-}
-
-void VelocityEngine::timerCallback()
-{
-    const std::lock_guard<std::mutex> lock (retirementMutex);
-    retiredStates.clear();
 }
 
 void VelocityEngine::setSampleRate (double rate) noexcept
@@ -50,11 +50,7 @@ void VelocityEngine::clearAllPads()
     newState->midiRouting.clearAftertouchSettings();
 
     auto* oldState = activeState.exchange (newState.release(), std::memory_order_acq_rel);
-    if (oldState != nullptr)
-    {
-        const std::lock_guard<std::mutex> lock (retirementMutex);
-        retiredStates.push_back (std::unique_ptr<EngineState> (oldState));
-    }
+    retireState (oldState);
 
     clearVoiceState();
 }
@@ -72,11 +68,7 @@ void VelocityEngine::setPadSettings (int note, int channel, const PadSettings& s
         newState->midiRouting.setAftertouchSettings (note, channel, AftertouchPadSettings{});
 
     auto* oldState = activeState.exchange (newState.release(), std::memory_order_acq_rel);
-    if (oldState != nullptr)
-    {
-        const std::lock_guard<std::mutex> lock (retirementMutex);
-        retiredStates.push_back (std::unique_ptr<EngineState> (oldState));
-    }
+    retireState (oldState);
 }
 
 void VelocityEngine::applyProfileState (const MidiRoutingSettings& routing,
@@ -99,11 +91,7 @@ void VelocityEngine::applyProfileState (const MidiRoutingSettings& routing,
     }
 
     auto* oldState = activeState.exchange (newState.release(), std::memory_order_acq_rel);
-    if (oldState != nullptr)
-    {
-        const std::lock_guard<std::mutex> lock (retirementMutex);
-        retiredStates.push_back (std::unique_ptr<EngineState> (oldState));
-    }
+    retireState (oldState);
 
     if (resetVoices)
         clearVoiceState();
@@ -131,11 +119,7 @@ void VelocityEngine::setMidiRouting (const MidiRoutingSettings& settings)
     newState->midiRouting.setSettings (settings);
 
     auto* oldState = activeState.exchange (newState.release(), std::memory_order_acq_rel);
-    if (oldState != nullptr)
-    {
-        const std::lock_guard<std::mutex> lock (retirementMutex);
-        retiredStates.push_back (std::unique_ptr<EngineState> (oldState));
-    }
+    retireState (oldState);
 }
 
 MidiRoutingSettings VelocityEngine::getMidiRouting() const noexcept
@@ -153,11 +137,7 @@ void VelocityEngine::setProcessingSettings (const EngineProcessingSettings& sett
     newState->processingSettings = settings;
 
     auto* oldState = activeState.exchange (newState.release(), std::memory_order_acq_rel);
-    if (oldState != nullptr)
-    {
-        const std::lock_guard<std::mutex> lock (retirementMutex);
-        retiredStates.push_back (std::unique_ptr<EngineState> (oldState));
-    }
+    retireState (oldState);
 }
 
 EngineProcessingSettings VelocityEngine::getProcessingSettings() const noexcept

@@ -30,7 +30,7 @@ struct PadSettings
     AftertouchPadSettings aftertouch;
 };
 
-class VelocityEngine : public juce::Timer
+class VelocityEngine
 {
 public:
     struct NoteKey
@@ -58,7 +58,7 @@ public:
     };
 
     VelocityEngine();
-    ~VelocityEngine() override;
+    ~VelocityEngine();
 
     void setSampleRate (double rate) noexcept;
     void setOutputMode (VelocityOutputMode mode) noexcept;
@@ -90,7 +90,6 @@ public:
     void clearPadHistogram (int note, int channel) noexcept { histogramBank.clearPad (note, channel); }
 
 private:
-    void timerCallback() override;
     PadSettings resolvePadSettingsState (const EngineState& state, int note, int channel) const;
 
     struct ActiveVoice
@@ -102,8 +101,6 @@ private:
     };
 
     std::atomic<EngineState*> activeState { nullptr };
-    mutable std::mutex retirementMutex;
-    std::vector<std::unique_ptr<EngineState>> retiredStates;
 
     std::array<ActiveVoice, kMidiNoteChannelSlots> activeVoices {};
     std::array<std::atomic<int64_t>, kMidiNoteChannelSlots> retriggerLastTimeUs {};
