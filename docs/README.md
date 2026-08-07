@@ -4,8 +4,9 @@
 
 | Doc | Purpose |
 |-----|---------|
-| [user/install.md](user/install.md) | Download, copy plugins, troubleshoot security prompts |
-| [user/getting-started.md](user/getting-started.md) | DAW setup, curve editor, profiles |
+| [YouTube Intro Video](https://www.youtube.com/watch?v=4KFOZPDS3r8) | 2-minute overview video of installation, setup, and pad editing |
+| [user/install.md](user/install.md) | Download, copy plugins, installer steps, security troubleshooting |
+| [user/getting-started.md](user/getting-started.md) | DAW setup, curve editor, profiles, preset workflow |
 
 The [README](../README.md) at the repo root is the public landing page for end users.
 

@@ -2,9 +2,14 @@
 
 **Per-pad MIDI velocity curves** — when your DAW’s single global curve is not enough.
 
-Free and open source. Built around **pad grids and drum layouts**, but useful anywhere you need **different dynamics per note**: finger drumming, electronic kits, hybrid percussion, inconsistent controllers, or teaching soft vs loud hits.
+Free and open source. Built for **pad grids, drum layouts, and e-kits**, giving you **independent velocity curves, gates, and dynamics per note**: customize ghost snares, punchy kicks, cymbal weights, and pad sensitivity individually across your kit.
 
-> **Status: beta (v0.2.x)** — core workflow works; expect rough edges. [Known limitations](#known-limitations) below.
+> **Status: beta (v0.2.x)** — core workflow works; expect rough edges. [Known limitations](#known-limitations) below.  
+> <a href="https://www.tracktion.com/develop/pluginval"><img src="https://assets.tracktion.com/img/pages/develop/develop-logo-pluginval.png" alt="Verified by pluginval" width="110" align="right" /></a> **Quality:** Verified by pluginval at strictness 5 (VST3/AU in CI).
+
+<iframe width="100%" height="415" src="https://www.youtube.com/embed/4KFOZPDS3r8" title="Super Velocity Curve Introduction Video" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+
+*Watch the [introduction video on YouTube](https://www.youtube.com/watch?v=4KFOZPDS3r8).*
 
 ## Support the project
 
@@ -12,8 +17,6 @@ If this helps your playing or teaching:
 
 - [Buy Me a Coffee](https://buymeacoffee.com/azhang)
 - [Ko-fi — Studio J](https://ko-fi.com/studioj)
-
-<a href="https://www.tracktion.com/develop/pluginval"><img src="https://assets.tracktion.com/img/pages/develop/develop-logo-pluginval.png" alt="Verified by pluginval" width="120" /></a> — automated validation at strictness 5 (VST3/AU in CI).
 
 ## Who is this for?
 
@@ -25,7 +28,7 @@ If this helps your playing or teaching:
 | **Teachers & demo** | Repeatable soft/loud tiers; profiles you can share as `.svcp` files |
 | **Multi-DAW users** | Same profile in Logic, Reaper, Bitwig, Ableton — export/import, not re-tweaking |
 
-**Velocity curve** is the term musicians already know. Super Velocity Curve means **better than one curve for the whole keyboard**.
+**Velocity curve** is the term musicians already know. Super Velocity Curve means **independent per-pad velocity curves instead of one uniform curve for your whole controller**.
 
 ## Why not just use my DAW curve?
 
@@ -45,19 +48,20 @@ If this helps your playing or teaching:
 
 **→ [Install guide](docs/user/install.md)** — copy plugins, rescan, unsigned-build tips.
 
-**Direct download (latest release, no release page):**
+**Direct download (latest release binaries):**
 - macOS: [SuperVelocityCurve-macOS-unsigned.zip](https://github.com/azazhang/SuperVelocityCurve/releases/latest/download/SuperVelocityCurve-macOS-unsigned.zip)
 - Windows: [SuperVelocityCurve-Windows-unsigned.zip](https://github.com/azazhang/SuperVelocityCurve/releases/latest/download/SuperVelocityCurve-Windows-unsigned.zip)
 
-Release notes: [releases/latest](https://github.com/azazhang/SuperVelocityCurve/releases/latest)
+Release notes & assets: [Releases page](https://github.com/azazhang/SuperVelocityCurve/releases/latest)
 
 ## Getting started
 
-**→ [Getting started](docs/user/getting-started.md)** — per-DAW routing, curve editor, profiles, save/export.
+**→ [Getting started guide](docs/user/getting-started.md)** — per-DAW routing, curve editor, profiles, save/export.  
+**→ [Watch intro video](https://www.youtube.com/watch?v=4KFOZPDS3r8)** — video walkthrough of setup and per-pad curve editing.
 
 ## Which plugin do I need?
 
-Two builds per release: **Instrument** (Ableton) and **MIDI FX** (most other DAWs).
+Two builds per release: **Instrument** (for DAWs without 3rd-party MIDI FX support, e.g. Ableton, Cubase, FL Studio) and **MIDI FX** (for DAWs with native MIDI FX slots, e.g. Logic, Reaper, Bitwig).
 
 | Format | Instrument | MIDI FX | Platforms |
 |--------|------------|---------|-----------|
@@ -66,18 +70,18 @@ Two builds per release: **Instrument** (Ableton) and **MIDI FX** (most other DAW
 | CLAP | — | ✓ | macOS, Windows |
 | Standalone | ✓ | — | macOS app, Windows exe |
 
-**Why no CLAP Instrument?** By design. CLAP hosts load MIDI FX as `note-effect` in the chain (Reaper, Bitwig, Logic). Ableton needs an **Instrument** slot and does not load CLAP — that build stays VST3/AU.
+**Why two builds?** DAWs handle MIDI plugins differently. Hosts like Logic Pro, Reaper, and Bitwig load MIDI FX directly in the track signal chain. Hosts like Ableton Live, Cubase, and FL Studio do not support third-party VST3 MIDI FX slots directly — in those DAWs, load the **Instrument** build on a MIDI track and route its MIDI output to your sampler or drum instrument.
 
-| DAW | Plugin name | Formats | Where to load |
-|-----|-------------|---------|---------------|
-| Ableton Live | Super Velocity Curve | VST3 Instrument | MIDI track (instrument slot — not MIDI FX) |
-| Logic Pro | Super Velocity Curve MIDI FX | AU | MIDI FX slot above the instrument |
-| Reaper | Super Velocity Curve MIDI FX | VST3, CLAP; AU on macOS | Track input FX (before instrument) |
-| Bitwig | Super Velocity Curve MIDI FX | CLAP (preferred), VST3 | Note FX chain |
-| FL Studio | Super Velocity Curve MIDI FX | VST3 | MIDI effect on channel (before sampler) |
-| Cubase / Nuendo | Super Velocity Curve MIDI FX | VST3 | MIDI Modifiers / MIDI plugin slot |
-| Studio One | Super Velocity Curve MIDI FX | VST3 | Event FX / MIDI FX (version-dependent) |
-| Standalone | Super Velocity Curve | app / exe | IAC (Mac) or loopMIDI (Windows) |
+| DAW | Recommended Plugin Build | Format | How to load / route |
+|-----|-------------------------|--------|---------------------|
+| **Logic Pro** | Super Velocity Curve MIDI FX | AU (`aumi`) | MIDI FX slot above instrument |
+| **Reaper** | Super Velocity Curve MIDI FX | VST3, CLAP, AU | Track Input FX or track FX chain before instrument |
+| **Bitwig Studio** | Super Velocity Curve MIDI FX | CLAP (preferred), VST3 | Note FX chain before instrument |
+| **Studio One** | Super Velocity Curve MIDI FX | VST3 | MIDI FX / Event FX slot |
+| **Ableton Live** | Super Velocity Curve (Instrument) | VST3, AU | MIDI track instrument slot; route MIDI output to drum track |
+| **Cubase / Nuendo** | Super Velocity Curve (Instrument) | VST3 | Instrument slot on MIDI track; route MIDI output to sampler |
+| **FL Studio** | Super Velocity Curve (Instrument) | VST3 | Load on MIDI track / Patcher; route MIDI to sampler |
+| **Standalone** | Super Velocity Curve | app / exe | Outputs processed MIDI via IAC Driver (macOS) or loopMIDI (Windows) |
 
 ## Features
 
