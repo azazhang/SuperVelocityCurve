@@ -4,12 +4,11 @@
 
 Free and open source. Built for **pad grids, drum layouts, and e-kits**, giving you **independent velocity curves, gates, and dynamics per note**: customize ghost snares, punchy kicks, cymbal weights, and pad sensitivity individually across your kit.
 
-> **Status: beta (v0.2.x)** — core workflow works; expect rough edges. [Known limitations](#known-limitations) below.  
-> <a href="https://www.tracktion.com/develop/pluginval"><img src="https://assets.tracktion.com/img/pages/develop/develop-logo-pluginval.png" alt="Verified by pluginval" width="110" align="right" /></a> **Quality:** Verified by pluginval at strictness 5 (VST3/AU in CI).
+> **Status: beta (v0.2.x)** — core workflow works; expect rough edges. See [known limitations](#known-limitations).  
+> **Quality:** <a href="https://www.tracktion.com/develop/pluginval"><img src="https://assets.tracktion.com/img/pages/develop/develop-logo-pluginval.png" alt="Verified by pluginval" width="100" /></a> Verified by pluginval at strictness 5 (VST3/AU in CI).
 
-<iframe width="100%" height="415" src="https://www.youtube.com/embed/4KFOZPDS3r8" title="Super Velocity Curve Introduction Video" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
-
-*Watch the [introduction video on YouTube](https://www.youtube.com/watch?v=4KFOZPDS3r8).*
+[![Super Velocity Curve Introduction Video](https://img.youtube.com/vi/4KFOZPDS3r8/maxresdefault.jpg)](https://www.youtube.com/watch?v=4KFOZPDS3r8)
+*▶ Click to watch the introduction video on YouTube.*
 
 ## Support the project
 
