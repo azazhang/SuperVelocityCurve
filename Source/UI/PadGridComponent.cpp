@@ -412,7 +412,7 @@ void PadGridComponent::PadCanvas::mouseDrag (const juce::MouseEvent& event)
         const auto vpPos = owner.viewport.getLocalPoint (this, pos);
         if (owner.viewport.autoScroll (vpPos.x, vpPos.y, 28, 14))
         {
-            dragState.currentPos = getMouseXYRelative();
+            dragState.currentPos = getLocalPoint (&owner.viewport, vpPos);
         }
 
         updateDragHoverTarget (dragState.currentPos);
@@ -435,11 +435,10 @@ void PadGridComponent::PadCanvas::timerCallback()
     }
 
     // Edge auto-scroll when user holds mouse near viewport boundary
-    const auto mousePos = getMouseXYRelative();
-    const auto vpPos = owner.viewport.getLocalPoint (this, mousePos);
+    const auto vpPos = owner.viewport.getLocalPoint (this, dragState.currentPos);
     if (owner.viewport.autoScroll (vpPos.x, vpPos.y, 28, 14))
     {
-        dragState.currentPos = getMouseXYRelative();
+        dragState.currentPos = getLocalPoint (&owner.viewport, vpPos);
         updateDragHoverTarget (dragState.currentPos);
         repaint();
     }
@@ -451,7 +450,8 @@ void PadGridComponent::PadCanvas::mouseWheelMove (const juce::MouseEvent& event,
 
     if (dragState.mode == DragMode::dragging)
     {
-        dragState.currentPos = getMouseXYRelative();
+        const auto vpPos = owner.viewport.getLocalPoint (this, event.getPosition());
+        dragState.currentPos = getLocalPoint (&owner.viewport, vpPos);
         updateDragHoverTarget (dragState.currentPos);
         repaint();
     }

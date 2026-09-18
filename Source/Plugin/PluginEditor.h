@@ -159,7 +159,7 @@ private:
 
     juce::String statusMessage;
     bool statusIsError = false;
-    int statusClearToken = 0;
+    int statusClearTicksRemaining = 0;
 
     svc::ControllerProfile profileBaseline;
     juce::String profileBaselineName;

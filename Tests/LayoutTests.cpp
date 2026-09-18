@@ -399,6 +399,7 @@ static juce::MouseEvent makeMouseEvent (juce::Component* comp,
 static int testHumanUserWorkflowSimulation()
 {
     // Step 1: Human launches plugin in DAW / Standalone host
+    std::cout << "  [SIM] Step 1: Human launches plugin in DAW / Standalone host" << std::endl;
     SuperVelocityCurveAudioProcessor processor;
     processor.prepareToPlay (48000.0, 512);
 
@@ -424,6 +425,7 @@ static int testHumanUserWorkflowSimulation()
     EXPECT_TRUE (curve->getPad().midiNote == 46);
 
     // Step 2: Human clicks Pad 12 (Kick, Note 36)
+    std::cout << "  [SIM] Step 2: Human clicks Pad 12 (Kick, Note 36)" << std::endl;
     const auto kickCenter = grid->padBoundsForIndex (12).getCentre();
     const auto clickKick = makeMouseEvent (canvas, kickCenter);
     canvas->mouseDown (clickKick);
@@ -433,6 +435,7 @@ static int testHumanUserWorkflowSimulation()
     EXPECT_TRUE (curve->getPad().midiNote == 36);
 
     // Step 3: Human double-clicks Pad 12 and renames it
+    std::cout << "  [SIM] Step 3: Human double-clicks Pad 12 and renames it" << std::endl;
     canvas->mouseDoubleClick (clickKick);
     auto* inlineText = findChildComponent<juce::TextEditor> (*canvas);
     EXPECT_TRUE (inlineText != nullptr);
@@ -442,12 +445,14 @@ static int testHumanUserWorkflowSimulation()
     EXPECT_TRUE (curve->getPad().label == "Super Kick 808");
 
     // Step 4: Human edits velocity curve control points on curveEditor
+    std::cout << "  [SIM] Step 4: Human edits velocity curve control points on curveEditor" << std::endl;
     auto editedPad = curve->getPad();
     editedPad.curve.setControlPoints ({ { 0.0f, 0.0f }, { 0.45f, 0.8f }, { 1.0f, 1.0f } });
     curve->setPad (editedPad, false);
     curve->onPadChanged (editedPad);
 
     // Step 5: Human clicks another pad (Pad 1, Closed HH) and then switches back to Pad 12
+    std::cout << "  [SIM] Step 5: Human switches between pads and checks persistence" << std::endl;
     const auto pad1Center = grid->padBoundsForIndex (1).getCentre();
     const auto clickPad1 = makeMouseEvent (canvas, pad1Center);
     canvas->mouseDown (clickPad1);
@@ -463,6 +468,7 @@ static int testHumanUserWorkflowSimulation()
     EXPECT_TRUE (std::abs (curve->getPad().curve.getControlPoints()[1].output - 0.8f) < 0.001f);
 
     // Step 6: Human uses context menu to copy curve from Pad 12 and paste to Pad 1
+    std::cout << "  [SIM] Step 6: Human copies curve and pastes to Pad 1" << std::endl;
     grid->onCopyCurveRequested (12);
     EXPECT_TRUE (grid->getCanPasteCurve());
 
@@ -471,10 +477,12 @@ static int testHumanUserWorkflowSimulation()
     EXPECT_TRUE (std::abs (processor.getProfileStore().getActiveProfile().getPads()[1].curve.getControlPoints()[1].output - 0.8f) < 0.001f);
 
     // Step 7: Human resets Pad 1 curve to linear
+    std::cout << "  [SIM] Step 7: Human resets Pad 1 curve to linear" << std::endl;
     grid->onResetCurveRequested (1);
     EXPECT_TRUE (processor.getProfileStore().getActiveProfile().getPads()[1].curve.getControlPoints().size() == 2);
 
     // Step 8: Human drags Pad 0 over Pad 1 to swap them
+    std::cout << "  [SIM] Step 8: Human drags Pad 0 over Pad 1 to swap them" << std::endl;
     const auto nameBefore0 = processor.getProfileStore().getActiveProfile().getPads()[0].label;
     const auto nameBefore1 = processor.getProfileStore().getActiveProfile().getPads()[1].label;
     const auto noteBefore0 = processor.getProfileStore().getActiveProfile().getPads()[0].midiNote;
@@ -491,11 +499,13 @@ static int testHumanUserWorkflowSimulation()
     EXPECT_TRUE (processor.getProfileStore().getActiveProfile().getPads()[1].midiNote == noteBefore0);
 
     // Step 9: Human moves Pad 0 to empty cell (row 7, col 2)
+    std::cout << "  [SIM] Step 9: Human moves Pad 0 to empty cell" << std::endl;
     grid->onPadMoveRequested (0, 7, 2);
     EXPECT_TRUE (processor.getProfileStore().getActiveProfile().getPads()[0].gridRow == 7);
     EXPECT_TRUE (processor.getProfileStore().getActiveProfile().getPads()[0].gridCol == 2);
 
     // Step 10: Human Alt-drags Pad 0 to duplicate it onto cell (7, 3)
+    std::cout << "  [SIM] Step 10: Human duplicates Pad 0 onto empty cell" << std::endl;
     const size_t padCountBeforeDup = processor.getProfileStore().getActiveProfile().getPads().size();
     grid->onPadDuplicateRequested (0, std::make_pair (7, 3));
     const size_t padCountAfterDup = processor.getProfileStore().getActiveProfile().getPads().size();
@@ -505,11 +515,16 @@ static int testHumanUserWorkflowSimulation()
     EXPECT_TRUE (processor.getProfileStore().getActiveProfile().getPads().back().label.contains ("Copy"));
 
     // Step 11: Human uses Delete key to delete the clone
-    grid->setSelectedPadIndex (static_cast<int> (padCountAfterDup) - 1);
+    std::cout << "  [SIM] Step 11: Human deletes cloned pad" << std::endl;
+    const int cloneIndex = static_cast<int> (padCountAfterDup) - 1;
+    grid->setSelectedPadIndex (cloneIndex);
+    if (grid->onPadSelected)
+        grid->onPadSelected (cloneIndex);
     canvas->keyPressed (juce::KeyPress (juce::KeyPress::deleteKey));
     EXPECT_TRUE (processor.getProfileStore().getActiveProfile().getPads().size() == padCountBeforeDup);
 
     // Step 12: Human plays live MIDI Note-On into processor
+    std::cout << "  [SIM] Step 12: Live MIDI Note-On processing" << std::endl;
     juce::AudioBuffer<float> audioBuffer (2, 512);
     audioBuffer.clear();
     juce::MidiBuffer midiBuffer;
@@ -533,6 +548,7 @@ static int testHumanUserWorkflowSimulation()
     grid->decayHitVisuals();
 
     // Step 13: Human uses MIDI Learn
+    std::cout << "  [SIM] Step 13: MIDI Learn" << std::endl;
     grid->onLearnMidiRequested (0);
     midiBuffer.clear();
     midiBuffer.addEvent (juce::MidiMessage::noteOn (1, 65, (juce::uint8) 85), 0);
@@ -543,6 +559,7 @@ static int testHumanUserWorkflowSimulation()
     EXPECT_TRUE (processor.getProfileStore().getActiveProfile().getPads()[0].midiChannel == 1);
 
     // Step 14: Human toggles theme between Light, Dark, and System
+    std::cout << "  [SIM] Step 14: Theme switching" << std::endl;
     processor.setTheme (svc::ui::ThemeMode::light);
     grid->refreshVisualCache();
     processor.setTheme (svc::ui::ThemeMode::dark);
@@ -551,10 +568,15 @@ static int testHumanUserWorkflowSimulation()
     grid->refreshVisualCache();
 
     // Step 15: Human toggles column selector
+    std::cout << "  [SIM] Step 15: Column selector" << std::endl;
     grid->setDisplayGridColumns (8);
     EXPECT_TRUE (grid->getDisplayGridColumns() == 8);
     grid->setDisplayGridColumns (4);
     EXPECT_TRUE (grid->getDisplayGridColumns() == 4);
+
+    // Step 16: Clean teardown
+    std::cout << "  [SIM] Step 16: Clean teardown" << std::endl;
+    editor.reset();
 
     return 0;
 }

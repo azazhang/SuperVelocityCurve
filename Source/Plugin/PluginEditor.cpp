@@ -241,10 +241,9 @@ SuperVelocityCurveAudioProcessorEditor::SuperVelocityCurveAudioProcessorEditor (
     {
         commitActivePadEdits();
         auto& store = audioProcessor.getProfileStore();
-        if (selectedPadIndex < 0)
+        const auto targetIndex = padGrid.getSelectedPadIndex();
+        if (targetIndex < 0 || targetIndex >= static_cast<int> (store.getActiveProfile().getPads().size()))
             return;
-
-        const auto targetIndex = selectedPadIndex;
         const auto& removed = store.getActiveProfile().getPads()[static_cast<size_t> (targetIndex)];
         const auto removedNote = removed.midiNote;
         const auto removedChannel = removed.midiChannel;
@@ -889,6 +888,7 @@ void SuperVelocityCurveAudioProcessorEditor::paint (juce::Graphics& g)
 
 void SuperVelocityCurveAudioProcessorEditor::clearStatus()
 {
+    statusClearTicksRemaining = 0;
     statusMessage.clear();
     statusIsError = false;
     statusLabel.setVisible (false);
@@ -896,12 +896,7 @@ void SuperVelocityCurveAudioProcessorEditor::clearStatus()
 
 void SuperVelocityCurveAudioProcessorEditor::scheduleStatusClear()
 {
-    const auto token = ++statusClearToken;
-    juce::Timer::callAfterDelay (6000, [safe = juce::Component::SafePointer<SuperVelocityCurveAudioProcessorEditor> (this), token]
-    {
-        if (safe != nullptr && safe->statusClearToken == token)
-            safe->clearStatus();
-    });
+    statusClearTicksRemaining = 180; // ~6 seconds at 30Hz editor timer
 }
 
 int SuperVelocityCurveAudioProcessorEditor::bottomSectionsHeight() const noexcept
@@ -1579,6 +1574,12 @@ void SuperVelocityCurveAudioProcessorEditor::timerCallback()
                 sendLookAndFeelChange();
             }
         }
+    }
+
+    if (statusClearTicksRemaining > 0)
+    {
+        if (--statusClearTicksRemaining == 0)
+            clearStatus();
     }
 
     updateLiveHits();
