@@ -8,11 +8,20 @@ StandaloneMidiPanel::StandaloneMidiPanel()
     addAndMakeVisible (inputDeviceBox);
     addAndMakeVisible (outputDeviceBox);
     addAndMakeVisible (statusLabel);
-    statusLabel.setFont (svc::ui::Theme::smallFont());
 
-    refreshDeviceLists();
+    inputLabel.setFont (svc::ui::Theme::smallFont().boldened());
+    outputLabel.setFont (svc::ui::Theme::smallFont().boldened());
+    statusLabel.setFont (svc::ui::Theme::smallFont());
+    statusLabel.setJustificationType (juce::Justification::centredLeft);
+
+    inputDeviceBox.setTextWhenNoChoicesAvailable ("Detecting MIDI inputs...");
+    outputDeviceBox.setTextWhenNoChoicesAvailable ("Detecting MIDI outputs...");
+    statusLabel.setText ("Scanning MIDI devices in background...", juce::dontSendNotification);
+
     inputDeviceBox.onChange = [this] { connectInput (inputDeviceBox.getSelectedItemIndex()); };
     outputDeviceBox.onChange = [this] { connectOutput (outputDeviceBox.getSelectedItemIndex()); };
+
+    scanDevicesAsync();
 }
 
 StandaloneMidiPanel::~StandaloneMidiPanel()
@@ -21,24 +30,51 @@ StandaloneMidiPanel::~StandaloneMidiPanel()
     activeOutput.reset();
 }
 
-void StandaloneMidiPanel::refreshDeviceLists()
+void StandaloneMidiPanel::scanDevicesAsync()
 {
+    if (scanning.exchange (true))
+        return;
+
+    juce::Component::SafePointer<StandaloneMidiPanel> safe (this);
+
+    juce::Thread::launch ([safe]
+    {
+        const auto inputs = juce::MidiInput::getAvailableDevices();
+        const auto outputs = juce::MidiOutput::getAvailableDevices();
+
+        juce::MessageManager::callAsync ([safe, inputs, outputs]
+        {
+            if (safe != nullptr)
+            {
+                safe->scanning = false;
+                safe->populateDeviceLists (inputs, outputs);
+            }
+        });
+    });
+}
+
+void StandaloneMidiPanel::populateDeviceLists (const juce::Array<juce::MidiDeviceInfo>& inputs,
+                                              const juce::Array<juce::MidiDeviceInfo>& outputs)
+{
+    cachedInputs = inputs;
+    cachedOutputs = outputs;
+
     inputDeviceBox.clear();
     outputDeviceBox.clear();
 
-    const auto inputs = juce::MidiInput::getAvailableDevices();
     int id = 1;
-    for (const auto& device : inputs)
+    for (const auto& device : cachedInputs)
         inputDeviceBox.addItem (device.name, id++);
 
     outputDeviceBox.addItem ("(none)", 1);
     id = 2;
-    const auto outputs = juce::MidiOutput::getAvailableDevices();
-    for (const auto& device : outputs)
+    for (const auto& device : cachedOutputs)
         outputDeviceBox.addItem (device.name, id++);
 
-    if (inputs.isEmpty())
-        statusLabel.setText ("No MIDI inputs. Use macOS IAC Driver or Windows loopMIDI.", juce::dontSendNotification);
+    if (cachedInputs.isEmpty())
+    {
+        statusLabel.setText ("No MIDI inputs found. Connect a controller or use macOS IAC Driver.", juce::dontSendNotification);
+    }
     else
     {
         inputDeviceBox.setSelectedId (1, juce::dontSendNotification);
@@ -51,15 +87,19 @@ void StandaloneMidiPanel::refreshDeviceLists()
 void StandaloneMidiPanel::connectInput (int index)
 {
     activeInput.reset();
-    const auto devices = juce::MidiInput::getAvailableDevices();
-    if (index < 0 || index >= devices.size())
+    if (index < 0 || index >= cachedInputs.size())
         return;
 
-    activeInput = juce::MidiInput::openDevice (devices[index].identifier, this);
+    const auto devInfo = cachedInputs[index];
+    activeInput = juce::MidiInput::openDevice (devInfo.identifier, this);
     if (activeInput != nullptr)
     {
         activeInput->start();
-        statusLabel.setText ("In: " + devices[index].name + " | Use IAC/loopMIDI for virtual routing.", juce::dontSendNotification);
+        statusLabel.setText ("Active In: " + devInfo.name + " | Ready", juce::dontSendNotification);
+    }
+    else
+    {
+        statusLabel.setText ("Failed to open MIDI input: " + devInfo.name, juce::dontSendNotification);
     }
 }
 
@@ -73,12 +113,12 @@ void StandaloneMidiPanel::connectOutput (int index)
         return;
     }
 
-    const auto devices = juce::MidiOutput::getAvailableDevices();
-    const auto deviceIndex = index - 1;
-    if (deviceIndex < 0 || deviceIndex >= devices.size())
+    const auto devIndex = index - 1;
+    if (devIndex < 0 || devIndex >= cachedOutputs.size())
         return;
 
-    activeOutput = juce::MidiOutput::openDevice (devices[deviceIndex].identifier);
+    const auto devInfo = cachedOutputs[devIndex];
+    activeOutput = juce::MidiOutput::openDevice (devInfo.identifier);
     if (onOutputDeviceChanged)
         onOutputDeviceChanged (activeOutput.get());
 }
@@ -91,19 +131,31 @@ void StandaloneMidiPanel::handleIncomingMidiMessage (juce::MidiInput*, const juc
 
 void StandaloneMidiPanel::paint (juce::Graphics& g)
 {
-    svc::ui::Theme::fillPanel (g, getLocalBounds().toFloat(), 8.0f);
+    auto bounds = getLocalBounds().toFloat();
+    svc::ui::Theme::fillPanel (g, bounds, 8.0f);
+
+    // Subtle hardware header badge
+    g.setColour (juce::Colour (svc::ui::Theme::textMuted()));
+    g.setFont (svc::ui::Theme::smallFont().boldened());
+    g.drawText ("STANDALONE MIDI ROUTING", bounds.removeFromTop (16.0f).reduced (10.0f, 2.0f),
+                juce::Justification::centredLeft);
 }
 
 void StandaloneMidiPanel::resized()
 {
-    auto area = getLocalBounds().reduced (8);
-    auto row1 = area.removeFromTop (36);
-    inputLabel.setBounds (row1.removeFromLeft (80));
+    auto area = getLocalBounds().reduced (8, 4);
+    area.removeFromTop (14); // Space for header badge
+
+    auto row1 = area.removeFromTop (22);
+    inputLabel.setBounds (row1.removeFromLeft (68));
     inputDeviceBox.setBounds (row1);
-    area.removeFromTop (4);
-    auto row2 = area.removeFromTop (36);
-    outputLabel.setBounds (row2.removeFromLeft (80));
+
+    area.removeFromTop (3);
+
+    auto row2 = area.removeFromTop (22);
+    outputLabel.setBounds (row2.removeFromLeft (68));
     outputDeviceBox.setBounds (row2);
-    area.removeFromTop (4);
+
+    area.removeFromTop (2);
     statusLabel.setBounds (area);
 }

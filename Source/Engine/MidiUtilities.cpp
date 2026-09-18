@@ -52,7 +52,7 @@ bool MidiRoutingSettings::remapNote (int& note, int& channel) const
 
 bool MidiRoutingSettings::passesChannelFilter (int channel) const
 {
-    return inputChannelFilter == 0 || inputChannelFilter == channel;
+    return channel == 0 || inputChannelFilter == 0 || inputChannelFilter == channel;
 }
 
 int MidiRoutingSettings::transformOutputChannel (int channel) const
@@ -117,25 +117,26 @@ bool MidiRoutingProcessor::processMessage (juce::MidiMessage& message) const
 
     if (message.isAftertouch())
     {
-        auto note = message.getNoteNumber();
+        const auto physicalNote = message.getNoteNumber();
+        const auto shaped = processAftertouch (physicalNote, channel, static_cast<float> (message.getAfterTouchValue()) / 127.0f);
+        auto note = physicalNote;
         routing.remapNote (note, channel);
-        const auto shaped = processAftertouch (note, channel, message.getAfterTouchValue() / 127.0f);
         message = juce::MidiMessage::aftertouchChange (routing.transformOutputChannel (channel),
                                                        note,
-                                                       static_cast<int> (shaped * 127.0f));
+                                                       juce::jlimit (0, 127, static_cast<int> (std::round (shaped * 127.0f))));
         return true;
     }
 
     if (message.isChannelPressure())
     {
-        const auto shaped = processChannelPressure (channel, message.getChannelPressureValue() / 127.0f);
+        const auto shaped = processChannelPressure (channel, static_cast<float> (message.getChannelPressureValue()) / 127.0f);
         message = juce::MidiMessage::channelPressureChange (routing.transformOutputChannel (channel),
-                                                            static_cast<int> (shaped * 127.0f));
+                                                            juce::jlimit (0, 127, static_cast<int> (std::round (shaped * 127.0f))));
         return true;
     }
 
-    if (routing.outputChannel != 0 && routing.outputChannel != channel && message.isController())
-        message = juce::MidiMessage::controllerEvent (routing.outputChannel, message.getControllerNumber(), message.getControllerValue());
+    if (channel > 0)
+        message.setChannel (routing.transformOutputChannel (channel));
 
     return true;
 }

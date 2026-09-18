@@ -70,11 +70,15 @@ public:
     int getDisplayGridColumns() const noexcept;
     int findPadIndex (int midiNote, int midiChannel) const;
     bool hasDuplicateMidiKey (int midiNote, int midiChannel, int ignoreIndex = -1) const;
-    std::pair<int, int> suggestNextGridCell() const;
+    std::pair<int, int> suggestNextGridCell (std::optional<int> columnsOverride = std::nullopt) const;
     ProfilePad makeDefaultPad() const;
     PadMutationResult addPad (ProfilePad pad, std::optional<int> insertIndex = std::nullopt);
     PadMutationResult removePad (int index);
     PadMutationResult setPadAt (int index, const ProfilePad& pad);
+    PadMutationResult swapPads (int indexA, int indexB);
+    PadMutationResult movePadToCell (int index, int targetRow, int targetCol);
+    PadMutationResult duplicatePad (int sourceIndex, std::optional<std::pair<int, int>> targetCell = std::nullopt);
+    PadMutationResult renamePad (int index, const juce::String& newLabel);
     void applyToEngine (class VelocityEngine& engine) const;
 
     static PadSettings toEngineSettings (const ProfilePad& pad);

@@ -1,6 +1,104 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+static juce::File globalSettingsOverrideFile;
+
+static juce::File getGlobalSettingsFile()
+{
+    if (globalSettingsOverrideFile != juce::File())
+        return globalSettingsOverrideFile;
+
+    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+        .getChildFile ("SuperVelocityCurve")
+        .getChildFile ("settings.xml");
+}
+
+void SuperVelocityCurveAudioProcessor::setGlobalSettingsFileOverride (juce::File file) noexcept
+{
+    globalSettingsOverrideFile = file;
+}
+
+void SuperVelocityCurveAudioProcessor::clearGlobalSettingsFileOverride() noexcept
+{
+    globalSettingsOverrideFile = juce::File();
+}
+
+void SuperVelocityCurveAudioProcessor::loadGlobalSettings()
+{
+    const auto file = getGlobalSettingsFile();
+    if (file.existsAsFile())
+    {
+        if (auto xml = juce::parseXML (file))
+        {
+            if (xml->hasTagName ("SuperVelocityCurveGlobalSettings"))
+            {
+                const auto themeStr = xml->getStringAttribute ("theme", "system");
+                currentTheme = svc::ui::themeModeFromString (themeStr);
+                svc::ui::Theme::setMode (currentTheme);
+
+                if (xml->hasAttribute ("padGridWidth"))
+                {
+                    const int w = xml->getIntAttribute ("padGridWidth", -1);
+                    customPadGridWidth = (w > 0) ? std::make_optional (w) : std::nullopt;
+                }
+                return;
+            }
+        }
+    }
+    svc::ui::Theme::setMode (currentTheme);
+}
+
+void SuperVelocityCurveAudioProcessor::saveGlobalSettings()
+{
+    const auto file = getGlobalSettingsFile();
+    file.getParentDirectory().createDirectory();
+
+    juce::XmlElement xml ("SuperVelocityCurveGlobalSettings");
+    xml.setAttribute ("theme", svc::ui::themeModeToString (currentTheme));
+    if (customPadGridWidth.has_value())
+        xml.setAttribute ("padGridWidth", *customPadGridWidth);
+    xml.writeTo (file);
+}
+
+void SuperVelocityCurveAudioProcessor::setTheme (svc::ui::ThemeMode mode)
+{
+    if (currentTheme != mode)
+    {
+        currentTheme = mode;
+        svc::ui::Theme::setMode (mode);
+        saveGlobalSettings();
+        markStateDirty();
+    }
+}
+
+void SuperVelocityCurveAudioProcessor::setCustomPadGridWidth (std::optional<int> width)
+{
+    const auto clamped = width.has_value() ? std::make_optional (std::max (180, *width)) : std::nullopt;
+    if (customPadGridWidth != clamped)
+    {
+        customPadGridWidth = clamped;
+        saveGlobalSettings();
+        markStateDirty();
+    }
+}
+
+void SuperVelocityCurveAudioProcessor::injectTestNote (int note, int channel, int velocity)
+{
+    const int ch = juce::jlimit (1, 16, channel);
+    const int n = juce::jlimit (0, 127, note);
+    const int vel = juce::jlimit (1, 127, velocity);
+
+    injectStandaloneMidi (juce::MidiMessage::noteOn (ch, n, static_cast<juce::uint8> (vel)));
+
+    auto aliveToken = isAlive;
+    juce::Timer::callAfterDelay (120, [this, aliveToken, ch, n]
+    {
+        if (aliveToken && aliveToken->load())
+            injectStandaloneMidi (juce::MidiMessage::noteOff (ch, n, static_cast<juce::uint8> (0)));
+    });
+}
+
+
 SuperVelocityCurveAudioProcessor::SuperVelocityCurveAudioProcessor()
 #if JucePlugin_IsMidiEffect
     : AudioProcessor (BusesProperties()),
@@ -9,12 +107,15 @@ SuperVelocityCurveAudioProcessor::SuperVelocityCurveAudioProcessor()
 #endif
       apvts (*this, nullptr, "Parameters", createParameterLayout())
 {
+    loadGlobalSettings();
     profileStore.applyActiveToEngine (engine);
     apvts.addParameterListener ("outputMode", this);
 }
 
 SuperVelocityCurveAudioProcessor::~SuperVelocityCurveAudioProcessor()
 {
+    if (isAlive)
+        *isAlive = false;
     apvts.removeParameterListener ("outputMode", this);
 }
 
@@ -108,6 +209,7 @@ void SuperVelocityCurveAudioProcessor::injectStandaloneMidi (const juce::MidiMes
 
 void SuperVelocityCurveAudioProcessor::setStandaloneMidiOutput (juce::MidiOutput* output) noexcept
 {
+    const juce::ScopedLock lock (standaloneOutputLock);
     standaloneMidiOutput = output;
 }
 
@@ -127,42 +229,27 @@ void SuperVelocityCurveAudioProcessor::processBlock (juce::AudioBuffer<float>& b
 
     engine.processMidiBuffer (midiMessages, buffer.getNumSamples());
 
-    if (engine.getHitFifo().hasPending())
+    if (engine.getHitFifo().hasPending() && getActiveEditor() != nullptr)
         triggerAsyncUpdate();
 
     if (wrapperType == wrapperType_Standalone && standaloneMidiOutput != nullptr)
     {
         const juce::ScopedLock lock (standaloneOutputLock);
-        for (const auto metadata : midiMessages)
-            standaloneMidiOutputQueue.addEvent (metadata.getMessage(), metadata.samplePosition);
+        if (standaloneMidiOutput != nullptr)
+        {
+            for (const auto metadata : midiMessages)
+                standaloneMidiOutput->sendMessageNow (metadata.getMessage());
+        }
     }
 }
 
 bool SuperVelocityCurveAudioProcessor::hasPendingStandaloneMidiOutput() const
 {
-    if (wrapperType != wrapperType_Standalone || standaloneMidiOutput == nullptr)
-        return false;
-
-    const juce::ScopedLock lock (standaloneOutputLock);
-    return standaloneMidiOutputQueue.getNumEvents() > 0;
+    return false;
 }
 
 void SuperVelocityCurveAudioProcessor::flushStandaloneMidiOutput()
 {
-    if (wrapperType != wrapperType_Standalone || standaloneMidiOutput == nullptr)
-        return;
-
-    juce::MidiBuffer toSend;
-    {
-        const juce::ScopedLock lock (standaloneOutputLock);
-        if (standaloneMidiOutputQueue.getNumEvents() == 0)
-            return;
-
-        toSend.swapWith (standaloneMidiOutputQueue);
-    }
-
-    for (const auto metadata : toSend)
-        standaloneMidiOutput->sendMessageNow (metadata.getMessage());
 }
 
 juce::AudioProcessorEditor* SuperVelocityCurveAudioProcessor::createEditor()
@@ -174,6 +261,8 @@ void SuperVelocityCurveAudioProcessor::getStateInformation (juce::MemoryBlock& d
 {
     juce::ValueTree state ("SuperVelocityCurveState");
     state.setProperty ("version", 2, nullptr);
+    state.setProperty ("theme", svc::ui::themeModeToString (currentTheme), nullptr);
+    state.setProperty ("padGridWidth", customPadGridWidth.has_value() ? *customPadGridWidth : -1, nullptr);
     state.appendChild (profileStore.toValueTree(), nullptr);
     state.appendChild (apvts.copyState(), nullptr);
 
@@ -188,6 +277,18 @@ void SuperVelocityCurveAudioProcessor::setStateInformation (const void* data, in
         const auto state = juce::ValueTree::fromXml (*xml);
         if (state.hasType ("SuperVelocityCurveState"))
         {
+            if (state.hasProperty ("theme"))
+            {
+                currentTheme = svc::ui::themeModeFromString (state.getProperty ("theme").toString());
+                svc::ui::Theme::setMode (currentTheme);
+            }
+
+            if (state.hasProperty ("padGridWidth"))
+            {
+                const int w = state.getProperty ("padGridWidth");
+                customPadGridWidth = (w > 0) ? std::make_optional (w) : std::nullopt;
+            }
+
             apvts.removeParameterListener ("outputMode", this);
 
             for (int i = 0; i < state.getNumChildren(); ++i)

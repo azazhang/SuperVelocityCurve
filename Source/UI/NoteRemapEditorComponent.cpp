@@ -64,10 +64,20 @@ NoteRemapEditorComponent::NoteRemapEditorComponent()
     table.getHeader().addColumn ("Src Ch", 2, 55);
     table.getHeader().addColumn ("Tgt Note", 3, 60);
     table.getHeader().addColumn ("Tgt Ch", 4, 55);
+    table.getHeader().addColumn ("", 5, 30);
 
     addButton.onClick = [this]
     {
-        entries.push_back ({ 60, 10, 36, 10 });
+        int nextSrc = 60;
+        int nextCh = 10;
+        while (std::any_of (entries.begin(), entries.end(), [nextSrc, nextCh] (const auto& e) {
+            return e.sourceNote == nextSrc && e.sourceChannel == nextCh;
+        }))
+        {
+            nextSrc = (nextSrc + 1) % 128;
+            if (nextSrc == 60) { nextCh = (nextCh % 16) + 1; }
+        }
+        entries.push_back ({ nextSrc, nextCh, 36, nextCh });
         syncProfileFromEntries();
         table.updateContent();
     };
@@ -171,6 +181,27 @@ juce::Component* NoteRemapEditorComponent::refreshComponentForCell (int rowNumbe
     if (rowNumber < 0 || rowNumber >= static_cast<int> (entries.size()))
         return nullptr;
 
+    if (columnId == 5)
+    {
+        auto* button = dynamic_cast<juce::TextButton*> (existing);
+        if (button == nullptr)
+        {
+            button = new juce::TextButton ("x");
+            button->setColour (juce::TextButton::buttonColourId, juce::Colour (svc::ui::Theme::panel()));
+            button->setColour (juce::TextButton::textColourOffId, juce::Colour (svc::ui::Theme::textSecondary()));
+        }
+        button->onClick = [this, rowNumber]
+        {
+            if (rowNumber >= 0 && rowNumber < static_cast<int> (entries.size()))
+            {
+                entries.erase (entries.begin() + rowNumber);
+                syncProfileFromEntries();
+                table.updateContent();
+            }
+        };
+        return button;
+    }
+
     const auto& entry = entries[static_cast<size_t> (rowNumber)];
 
     if (columnId == 2 || columnId == 4)
@@ -204,6 +235,7 @@ juce::Component* NoteRemapEditorComponent::refreshComponentForCell (int rowNumbe
 
 void NoteRemapEditorComponent::cellClicked (int rowNumber, int columnId, const juce::MouseEvent& event)
 {
+    juce::ignoreUnused (columnId);
     if (event.mods.isRightButtonDown() && rowNumber >= 0 && rowNumber < static_cast<int> (entries.size()))
     {
         entries.erase (entries.begin() + rowNumber);

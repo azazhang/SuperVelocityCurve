@@ -432,9 +432,9 @@ bool ControllerProfile::hasDuplicateMidiKey (int midiNote, int midiChannel, int 
     return false;
 }
 
-std::pair<int, int> ControllerProfile::suggestNextGridCell() const
+std::pair<int, int> ControllerProfile::suggestNextGridCell (std::optional<int> columnsOverride) const
 {
-    const auto cols = getDisplayGridColumns();
+    const auto cols = columnsOverride.value_or (getDisplayGridColumns());
     constexpr int kMaxCells = 256;
     std::array<bool, kMaxCells> occupied {};
 
@@ -534,6 +534,125 @@ PadMutationResult ControllerProfile::setPadAt (int index, const ProfilePad& pad)
         return PadMutationResult::duplicateMidiKey;
 
     pads[static_cast<size_t> (index)] = pad;
+    layout = ProfileLayout::custom;
+    return PadMutationResult::ok;
+}
+
+PadMutationResult ControllerProfile::swapPads (int indexA, int indexB)
+{
+    if (indexA < 0 || indexA >= static_cast<int> (pads.size()) ||
+        indexB < 0 || indexB >= static_cast<int> (pads.size()))
+        return PadMutationResult::indexOutOfRange;
+
+    if (indexA == indexB)
+        return PadMutationResult::ok;
+
+    const auto rowA = pads[static_cast<size_t> (indexA)].gridRow;
+    const auto colA = pads[static_cast<size_t> (indexA)].gridCol;
+    const auto rowB = pads[static_cast<size_t> (indexB)].gridRow;
+    const auto colB = pads[static_cast<size_t> (indexB)].gridCol;
+
+    std::swap (pads[static_cast<size_t> (indexA)], pads[static_cast<size_t> (indexB)]);
+    pads[static_cast<size_t> (indexA)].gridRow = rowA;
+    pads[static_cast<size_t> (indexA)].gridCol = colA;
+    pads[static_cast<size_t> (indexB)].gridRow = rowB;
+    pads[static_cast<size_t> (indexB)].gridCol = colB;
+    layout = ProfileLayout::custom;
+    return PadMutationResult::ok;
+}
+
+PadMutationResult ControllerProfile::movePadToCell (int index, int targetRow, int targetCol)
+{
+    if (index < 0 || index >= static_cast<int> (pads.size()))
+        return PadMutationResult::indexOutOfRange;
+
+    targetRow = juce::jmax (0, targetRow);
+    targetCol = juce::jmax (0, targetCol);
+
+    for (size_t i = 0; i < pads.size(); ++i)
+    {
+        if (static_cast<int> (i) != index && pads[i].gridRow == targetRow && pads[i].gridCol == targetCol)
+        {
+            pads[i].gridRow = pads[static_cast<size_t> (index)].gridRow;
+            pads[i].gridCol = pads[static_cast<size_t> (index)].gridCol;
+            break;
+        }
+    }
+
+    pads[static_cast<size_t> (index)].gridRow = targetRow;
+    pads[static_cast<size_t> (index)].gridCol = targetCol;
+    layout = ProfileLayout::custom;
+    return PadMutationResult::ok;
+}
+
+PadMutationResult ControllerProfile::duplicatePad (int sourceIndex, std::optional<std::pair<int, int>> targetCell)
+{
+    if (sourceIndex < 0 || sourceIndex >= static_cast<int> (pads.size()))
+        return PadMutationResult::indexOutOfRange;
+
+    if (static_cast<int> (pads.size()) >= kMaxProfilePads)
+        return PadMutationResult::maxPadsReached;
+
+    ProfilePad clone = pads[static_cast<size_t> (sourceIndex)];
+    clone.label = clone.label + " (Copy)";
+
+    int candidateNote = (clone.midiNote + 1) % 128;
+    int candidateChannel = clone.midiChannel;
+    int tries = 0;
+    while (hasDuplicateMidiKey (candidateNote, candidateChannel) && tries < 128 * 16)
+    {
+        candidateNote = (candidateNote + 1) % 128;
+        if (candidateNote == 0)
+            candidateChannel = (candidateChannel % 16) + 1;
+        ++tries;
+    }
+
+    if (tries >= 128 * 16)
+        return PadMutationResult::duplicateMidiKey;
+
+    clone.midiNote = candidateNote;
+    clone.midiChannel = candidateChannel;
+
+    if (targetCell.has_value())
+    {
+        bool occupied = false;
+        for (const auto& p : pads)
+        {
+            if (p.gridRow == targetCell->first && p.gridCol == targetCell->second)
+            {
+                occupied = true;
+                break;
+            }
+        }
+
+        if (! occupied)
+        {
+            clone.gridRow = targetCell->first;
+            clone.gridCol = targetCell->second;
+        }
+        else
+        {
+            const auto nextCell = suggestNextGridCell();
+            clone.gridRow = nextCell.first;
+            clone.gridCol = nextCell.second;
+        }
+    }
+    else
+    {
+        const auto nextCell = suggestNextGridCell();
+        clone.gridRow = nextCell.first;
+        clone.gridCol = nextCell.second;
+    }
+
+    return addPad (std::move (clone));
+}
+
+PadMutationResult ControllerProfile::renamePad (int index, const juce::String& newLabel)
+{
+    if (index < 0 || index >= static_cast<int> (pads.size()))
+        return PadMutationResult::indexOutOfRange;
+
+    pads[static_cast<size_t> (index)].label = newLabel.trim();
     layout = ProfileLayout::custom;
     return PadMutationResult::ok;
 }

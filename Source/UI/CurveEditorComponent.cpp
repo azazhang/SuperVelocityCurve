@@ -150,7 +150,8 @@ int CurveEditorComponent::findNearestControlPoint (juce::Point<float> pos) const
 
 void CurveEditorComponent::notifyChanged (bool commitToProfile)
 {
-    if (commitToProfile && onPadChanged)
+    juce::ignoreUnused (commitToProfile);
+    if (onPadChanged)
         onPadChanged (currentPad);
 
     repaint();
@@ -158,6 +159,9 @@ void CurveEditorComponent::notifyChanged (bool commitToProfile)
 
 void CurveEditorComponent::applyPreset (svc::CurvePreset preset)
 {
+    if (onBeforeCurveMutated)
+        onBeforeCurveMutated();
+
     activeCurve().applyPreset (preset);
     notifyChanged();
     repaint();
@@ -165,6 +169,9 @@ void CurveEditorComponent::applyPreset (svc::CurvePreset preset)
 
 void CurveEditorComponent::resetCurve()
 {
+    if (onBeforeCurveMutated)
+        onBeforeCurveMutated();
+
     activeCurve().setIdentity();
     notifyChanged();
     repaint();
@@ -316,11 +323,25 @@ void CurveEditorComponent::drawCurve (juce::Graphics& g) const
     fillPath.lineTo (normalizedToPoint (1.0f, lut.back()).x, plot.getBottom());
     fillPath.closeSubPath();
 
-    g.setColour (juce::Colour (svc::ui::Theme::accent()).withAlpha (0.14f));
+    // Vertical gradient fill under curve
+    juce::ColourGradient fillGrad (juce::Colour (svc::ui::Theme::curveLine()).withAlpha (0.32f),
+                                   0.0f, plot.getY(),
+                                   juce::Colour (svc::ui::Theme::curveLine()).withAlpha (0.02f),
+                                   0.0f, plot.getBottom(), false);
+    g.setGradientFill (fillGrad);
     g.fillPath (fillPath);
 
-    g.setColour (juce::Colour (svc::ui::Theme::curveLine()));
-    g.strokePath (curvePath, juce::PathStrokeType (2.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    // Neon glow stroke pass
+    g.setColour (juce::Colour (svc::ui::Theme::curveLine()).withAlpha (0.24f));
+    g.strokePath (curvePath, juce::PathStrokeType (6.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+    // Foreground crisp gradient curve stroke
+    juce::ColourGradient strokeGrad (juce::Colour (svc::ui::Theme::curveLine()),
+                                     plot.getX(), plot.getBottom(),
+                                     juce::Colour (svc::ui::Theme::curveLineEnd()),
+                                     plot.getRight(), plot.getY(), false);
+    g.setGradientFill (strokeGrad);
+    g.strokePath (curvePath, juce::PathStrokeType (2.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
     const auto& points = activeCurve().getControlPoints();
     for (int i = 0; i < static_cast<int> (points.size()); ++i)
@@ -333,23 +354,41 @@ void CurveEditorComponent::drawCurve (juce::Graphics& g) const
 
         if (isEndpoint)
         {
-            const auto handleW = 12.0f;
-            const auto handleH = 14.0f;
+            const auto handleW = 14.0f;
+            const auto handleH = 16.0f;
             juce::Rectangle<float> handle (p.x - handleW * 0.5f, p.y - handleH * 0.5f, handleW, handleH);
+
+            // Soft glow
+            g.setColour ((isLeftGate ? juce::Colour (svc::ui::Theme::accentGold())
+                                    : juce::Colour (svc::ui::Theme::accentSecondary())).withAlpha (0.35f));
+            g.fillRoundedRectangle (handle.expanded (2.0f), 4.5f);
+
+            // Solid handle body
             g.setColour (isLeftGate ? juce::Colour (svc::ui::Theme::accentGold())
                                     : juce::Colour (svc::ui::Theme::accentSecondary()));
-            g.fillRoundedRectangle (handle, 3.0f);
-            g.setColour (juce::Colours::white.withAlpha (0.9f));
-            g.drawRoundedRectangle (handle, 3.0f, 1.2f);
+            g.fillRoundedRectangle (handle, 3.5f);
+
+            // Specular border
+            g.setColour (juce::Colours::white.withAlpha (0.95f));
+            g.drawRoundedRectangle (handle, 3.5f, 1.2f);
         }
         else
         {
-            g.setColour (juce::Colour (svc::ui::Theme::accent()).withAlpha (0.25f));
-            g.fillEllipse (p.x - 7.0f, p.y - 7.0f, 14.0f, 14.0f);
-            g.setColour (juce::Colours::white);
-            g.fillEllipse (p.x - 5.0f, p.y - 5.0f, 10.0f, 10.0f);
-            g.setColour (juce::Colour (svc::ui::Theme::border()));
-            g.drawEllipse (p.x - 5.0f, p.y - 5.0f, 10.0f, 10.0f, 1.0f);
+            // Illuminated outer glow ring
+            g.setColour (juce::Colour (svc::ui::Theme::accent()).withAlpha (0.35f));
+            g.fillEllipse (p.x - 8.0f, p.y - 8.0f, 16.0f, 16.0f);
+
+            // Dark bezel
+            g.setColour (juce::Colour (svc::ui::Theme::panel()));
+            g.fillEllipse (p.x - 5.5f, p.y - 5.5f, 11.0f, 11.0f);
+
+            // Center pip
+            g.setColour (juce::Colour (svc::ui::Theme::accent()));
+            g.fillEllipse (p.x - 3.5f, p.y - 3.5f, 7.0f, 7.0f);
+
+            // White highlight ring
+            g.setColour (juce::Colours::white.withAlpha (0.9f));
+            g.drawEllipse (p.x - 5.5f, p.y - 5.5f, 11.0f, 11.0f, 1.2f);
         }
     }
 
@@ -450,12 +489,104 @@ void CurveEditorComponent::paint (juce::Graphics& g)
     drawGateZones (g);
     drawCurve (g);
     drawLiveHits (g);
+    drawHudTooltip (g);
+
+    if (isAuditioningCompare)
+    {
+        const auto bannerW = std::min (200.0f, plot.getWidth() - 16.0f);
+        const auto bannerH = 22.0f;
+        auto bannerRect = juce::Rectangle<float> (plot.getCentreX() - bannerW * 0.5f,
+                                                  plot.getY() + 8.0f,
+                                                  bannerW, bannerH);
+        g.setColour (juce::Colour (svc::ui::Theme::accentGold()).withAlpha (0.25f));
+        g.fillRoundedRectangle (bannerRect.expanded (3.0f), 6.0f);
+        g.setColour (juce::Colour (svc::ui::Theme::panelRaised()));
+        g.fillRoundedRectangle (bannerRect, 5.0f);
+        g.setColour (juce::Colour (svc::ui::Theme::accentGold()));
+        g.drawRoundedRectangle (bannerRect, 5.0f, 1.2f);
+
+        g.setFont (svc::ui::Theme::smallFont().boldened());
+        g.setColour (juce::Colour (svc::ui::Theme::accentGold()));
+        g.drawText ("AUDITIONING CAPTURED A", bannerRect.toNearestInt(), juce::Justification::centred);
+    }
 
     g.setFont (svc::ui::Theme::smallFont());
     g.setColour (juce::Colour (svc::ui::Theme::textMuted()));
     g.drawText ("Gate handles: left/right = input range, up/down = output at gate | dbl-click add | right-click remove",
                 getLocalBounds().removeFromBottom (kCurveFooterHeight).reduced (12, 2),
                 juce::Justification::centred);
+}
+
+void CurveEditorComponent::drawHudTooltip (juce::Graphics& g) const
+{
+    const auto plot = plotArea();
+    if (! isHovered && draggedPointIndex < 0)
+        return;
+
+    int inVel = 0;
+    int outVel = 0;
+    juce::Point<float> anchorPos;
+
+    if (draggedPointIndex >= 0)
+    {
+        const auto& points = activeCurve().getControlPoints();
+        if (draggedPointIndex >= static_cast<int> (points.size()))
+            return;
+        const auto& pt = points[static_cast<size_t> (draggedPointIndex)];
+        inVel = juce::jlimit (0, 127, static_cast<int> (std::lround (pt.input * 127.0f)));
+        const auto outNorm = controlOutputToPlot (pt.output);
+        outVel = juce::jlimit (0, 127, static_cast<int> (std::lround (outNorm * 127.0f)));
+        anchorPos = normalizedToPoint (pt.input, outNorm);
+    }
+    else
+    {
+        if (! plot.contains (hoverPos))
+            return;
+
+        const auto nearest = findNearestControlPoint (hoverPos);
+        if (nearest >= 0)
+        {
+            const auto& pt = activeCurve().getControlPoints()[static_cast<size_t> (nearest)];
+            inVel = juce::jlimit (0, 127, static_cast<int> (std::lround (pt.input * 127.0f)));
+            const auto outNorm = controlOutputToPlot (pt.output);
+            outVel = juce::jlimit (0, 127, static_cast<int> (std::lround (outNorm * 127.0f)));
+            anchorPos = normalizedToPoint (pt.input, outNorm);
+        }
+        else
+        {
+            const auto norm = eventToNormalized (hoverPos);
+            inVel = juce::jlimit (0, 127, static_cast<int> (std::lround (norm.x * 127.0f)));
+            const auto outNorm = activeCurve().mapNormalized (norm.x);
+            outVel = juce::jlimit (0, 127, static_cast<int> (std::lround (outNorm * 127.0f)));
+            anchorPos = normalizedToPoint (norm.x, outNorm);
+        }
+    }
+
+    const auto text = "In: " + juce::String (inVel) + " " + juce::String::charToString (0x2192) + " Out: " + juce::String (outVel);
+    const float badgeW = 96.0f;
+    const float badgeH = 20.0f;
+
+    float badgeX = anchorPos.x - badgeW * 0.5f;
+    float badgeY = anchorPos.y - badgeH - 12.0f;
+
+    if (badgeY < plot.getY() + 4.0f)
+        badgeY = anchorPos.y + 14.0f;
+    badgeX = juce::jlimit (plot.getX() + 4.0f, plot.getRight() - badgeW - 4.0f, badgeX);
+
+    const auto badgeRect = juce::Rectangle<float> (badgeX, badgeY, badgeW, badgeH);
+
+    g.setColour (juce::Colours::black.withAlpha (0.4f));
+    g.fillRoundedRectangle (badgeRect.translated (0.0f, 2.0f), 5.0f);
+
+    g.setColour (juce::Colour (svc::ui::Theme::panelRaised()).withAlpha (0.95f));
+    g.fillRoundedRectangle (badgeRect, 5.0f);
+
+    g.setColour (juce::Colour (svc::ui::Theme::accent()).withAlpha (0.75f));
+    g.drawRoundedRectangle (badgeRect, 5.0f, 1.2f);
+
+    g.setFont (svc::ui::Theme::smallFont().boldened());
+    g.setColour (juce::Colour (svc::ui::Theme::textPrimary()));
+    g.drawText (text, badgeRect.toNearestInt(), juce::Justification::centred, false);
 }
 
 void CurveEditorComponent::mouseDown (const juce::MouseEvent& event)
@@ -466,6 +597,9 @@ void CurveEditorComponent::mouseDown (const juce::MouseEvent& event)
         auto points = activeCurve().getControlPoints();
         if (index > 0 && index < static_cast<int> (points.size()) - 1)
         {
+            if (onBeforeCurveMutated)
+                onBeforeCurveMutated();
+
             points.erase (points.begin() + index);
             activeCurve().setControlPoints (points);
             notifyChanged();
@@ -475,10 +609,18 @@ void CurveEditorComponent::mouseDown (const juce::MouseEvent& event)
     }
 
     draggedPointIndex = findNearestControlPoint (event.position);
+    if (draggedPointIndex >= 0)
+    {
+        if (onBeforeCurveMutated)
+            onBeforeCurveMutated();
+    }
 }
 
 void CurveEditorComponent::mouseDrag (const juce::MouseEvent& event)
 {
+    hoverPos = event.position;
+    isHovered = true;
+
     if (draggedPointIndex < 0)
         return;
 
@@ -494,25 +636,29 @@ void CurveEditorComponent::mouseDrag (const juce::MouseEvent& event)
     if (draggedPointIndex == 0)
     {
         // Left gate: X = input threshold (below → 0); Y = output at gate entry.
-        point.input = juce::jlimit (0.0f, points[1].input - 0.02f, normalized.x);
-        point.output = juce::jlimit (0.0f, points[1].output - 0.001f, plotOutput);
+        const auto maxIn = std::max (0.0f, points[1].input - 0.005f);
+        point.input = juce::jlimit (0.0f, maxIn, normalized.x);
+        const auto maxOut = std::max (0.0f, points[1].output - 0.001f);
+        point.output = juce::jlimit (0.0f, maxOut, plotOutput);
     }
     else if (draggedPointIndex == lastIndex)
     {
         // Right gate: X = input ceiling (above → max); Y = output at ceiling.
-        point.input = juce::jlimit (points[static_cast<size_t> (lastIndex - 1)].input + 0.02f,
-                                    1.0f, normalized.x);
-        point.output = juce::jlimit (points[static_cast<size_t> (lastIndex - 1)].output + 0.001f,
-                                     1.0f, plotOutput);
+        const auto minIn = std::min (1.0f, points[static_cast<size_t> (lastIndex - 1)].input + 0.005f);
+        point.input = juce::jlimit (minIn, 1.0f, normalized.x);
+        const auto minOut = std::min (1.0f, points[static_cast<size_t> (lastIndex - 1)].output + 0.001f);
+        point.output = juce::jlimit (minOut, 1.0f, plotOutput);
     }
     else
     {
-        point.input = juce::jlimit (points[static_cast<size_t> (draggedPointIndex - 1)].input + 0.02f,
-                                    points[static_cast<size_t> (draggedPointIndex + 1)].input - 0.02f,
-                                    normalized.x);
+        const auto prevIn = points[static_cast<size_t> (draggedPointIndex - 1)].input;
+        const auto nextIn = points[static_cast<size_t> (draggedPointIndex + 1)].input;
+        const auto minIn = prevIn + 0.002f;
+        const auto maxIn = std::max (minIn, nextIn - 0.002f);
+        point.input = juce::jlimit (minIn, maxIn, normalized.x);
 
         const auto minOut = points[static_cast<size_t> (draggedPointIndex - 1)].output + 0.001f;
-        const auto maxOut = points[static_cast<size_t> (draggedPointIndex + 1)].output - 0.001f;
+        const auto maxOut = std::max (minOut, points[static_cast<size_t> (draggedPointIndex + 1)].output - 0.001f);
         point.output = juce::jlimit (minOut, maxOut, plotOutput);
     }
 
@@ -524,6 +670,7 @@ void CurveEditorComponent::mouseUp (const juce::MouseEvent&)
 {
     const bool wasDragging = draggedPointIndex >= 0;
     draggedPointIndex = -1;
+    isHovered = false;
 
     if (wasDragging)
     {
@@ -532,6 +679,20 @@ void CurveEditorComponent::mouseUp (const juce::MouseEvent&)
         if (onPadEditFinished)
             onPadEditFinished();
     }
+    repaint();
+}
+
+void CurveEditorComponent::mouseMove (const juce::MouseEvent& event)
+{
+    hoverPos = event.position;
+    isHovered = plotArea().contains (hoverPos);
+    repaint();
+}
+
+void CurveEditorComponent::mouseExit (const juce::MouseEvent&)
+{
+    isHovered = false;
+    repaint();
 }
 
 void CurveEditorComponent::mouseDoubleClick (const juce::MouseEvent& event)
@@ -546,6 +707,9 @@ void CurveEditorComponent::mouseDoubleClick (const juce::MouseEvent& event)
 
     if (normalized.x <= inputGate + 0.01f || normalized.x >= inputCeil - 0.01f)
         return;
+
+    if (onBeforeCurveMutated)
+        onBeforeCurveMutated();
 
     points.push_back ({ normalized.x, plotOutputToControl (normalized.y) });
     activeCurve().setControlPoints (points);

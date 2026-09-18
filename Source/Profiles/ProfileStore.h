@@ -42,6 +42,10 @@ public:
     bool updateActiveUserProfile (const juce::String& name, juce::String* errorMessage = nullptr);
     PadMutationResult addPadToActive (const ProfilePad& pad = {});
     PadMutationResult removePadFromActive (int index);
+    PadMutationResult swapPadsInActive (int indexA, int indexB);
+    PadMutationResult movePadInActive (int index, int targetRow, int targetCol);
+    PadMutationResult duplicatePadInActive (int sourceIndex, std::optional<std::pair<int, int>> targetCell = std::nullopt);
+    PadMutationResult renamePadInActive (int index, const juce::String& newLabel);
     bool deleteUserProfile (int index);
     bool duplicateActiveAsUserProfile (const juce::String& name);
     void applyActiveToEngine (class VelocityEngine& engine) const;

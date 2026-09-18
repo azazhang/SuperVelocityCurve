@@ -9,6 +9,7 @@
 #include "../Source/Profiles/ProfileStore.h"
 #include <cmath>
 #include <iostream>
+#include <thread>
 
 #define EXPECT_TRUE(expr) do { if (! (expr)) { std::cerr << "FAIL: " #expr << " at " << __LINE__ << '\n'; return 1; } } while (0)
 #define EXPECT_NEAR(a, b, eps) do { if (std::abs ((a) - (b)) > (eps)) { std::cerr << "FAIL: " #a " vs " #b << " at " << __LINE__ << '\n'; return 1; } } while (0)
@@ -106,6 +107,12 @@ static int testNoteRemapAndChannelFilter()
 
     EXPECT_TRUE (msg.getNoteNumber() == 36);
     EXPECT_TRUE (msg.getChannel() == 10);
+
+    // Non-channel messages like MIDI clock must not be blocked by inputChannelFilter
+    buffer.clear();
+    buffer.addEvent (juce::MidiMessage::midiClock(), 0);
+    engine.processMidiBuffer (buffer, 64);
+    EXPECT_TRUE (buffer.getNumEvents() == 1);
     return 0;
 }
 
@@ -208,10 +215,73 @@ static int testPolyAftertouchRemap()
     svc::MidiRoutingProcessor processor;
     processor.setSettings (routing);
 
-    auto message = juce::MidiMessage::aftertouchChange (10, 60, 80);
+    svc::AftertouchPadSettings pad60;
+    pad60.enabled = true;
+    pad60.curve.setControlPoints ({ { 0.0f, 0.0f }, { 1.0f, 0.5f } });
+    processor.setAftertouchSettings (60, 10, pad60);
+
+    auto message = juce::MidiMessage::aftertouchChange (10, 60, 100);
     EXPECT_TRUE (processor.processMessage (message));
     EXPECT_TRUE (message.getNoteNumber() == 36);
     EXPECT_TRUE (message.getChannel() == 10);
+    EXPECT_TRUE (message.getAfterTouchValue() == 50);
+    return 0;
+}
+
+static int testZoneRoutingPolyAftertouch()
+{
+    svc::MidiRoutingSettings routing;
+    routing.setRemap (60, 1, 36, 1);
+
+    svc::EngineProcessingSettings processing;
+    processing.zoneRouting.enabled = true;
+    processing.zoneRouting.groupOutputChannel[static_cast<size_t> (svc::PadGroup::kick)] = 5;
+
+    svc::PadSettings pad;
+    pad.group = svc::PadGroup::kick;
+    pad.aftertouch.enabled = true;
+    pad.aftertouch.curve.applyPreset (svc::CurvePreset::linear);
+
+    svc::VelocityEngine engine;
+    engine.setProcessingSettings (processing);
+    engine.setMidiRouting (routing);
+    engine.setPadSettings (60, 1, pad);
+
+    juce::MidiBuffer buffer;
+    buffer.addEvent (juce::MidiMessage::aftertouchChange (1, 60, 80), 0);
+    engine.processMidiBuffer (buffer, 64);
+    EXPECT_TRUE (buffer.getNumEvents() == 1);
+
+    for (const auto metadata : buffer)
+    {
+        const auto msg = metadata.getMessage();
+        EXPECT_TRUE (msg.isAftertouch());
+        EXPECT_TRUE (msg.getNoteNumber() == 36);
+        EXPECT_TRUE (msg.getChannel() == 5);
+    }
+    return 0;
+}
+
+static int testMidiRoutingOutputChannelRemapsAllChannelMessages()
+{
+    svc::MidiRoutingSettings routing;
+    routing.outputChannel = 3;
+
+    svc::MidiRoutingProcessor processor;
+    processor.setSettings (routing);
+
+    auto pb = juce::MidiMessage::pitchWheel (1, 8192);
+    EXPECT_TRUE (processor.processMessage (pb));
+    EXPECT_TRUE (pb.getChannel() == 3);
+
+    auto cc = juce::MidiMessage::controllerEvent (1, 64, 127);
+    EXPECT_TRUE (processor.processMessage (cc));
+    EXPECT_TRUE (cc.getChannel() == 3);
+
+    auto pc = juce::MidiMessage::programChange (1, 10);
+    EXPECT_TRUE (processor.processMessage (pc));
+    EXPECT_TRUE (pc.getChannel() == 3);
+
     return 0;
 }
 
@@ -397,10 +467,7 @@ static int testDeterministicVelocityReplay()
         if (buffer.getNumEvents() != 1)
             return -1;
 
-        for (const auto metadata : buffer)
-            return static_cast<int> (metadata.getMessage().getVelocity());
-
-        return -1;
+        return static_cast<int> ((*buffer.begin()).getMessage().getVelocity());
     };
 
     const auto first = runOnce (0.5f);
@@ -578,8 +645,190 @@ static int testHitEventFifoDropsOldestWhenFull()
     return 0;
 }
 
+static int testNoteOnVelocityZeroClampedToMin()
+{
+    svc::VelocityEngine engine;
+    engine.setOutputMode (svc::VelocityOutputMode::midi1);
+
+    svc::PadSettings pad;
+    pad.enabled = true;
+    pad.curve.setFloor (0.0f);
+    pad.curve.setCeiling (0.0f);
+    engine.setPadSettings (36, 10, pad);
+
+    juce::MidiBuffer buffer;
+    buffer.addEvent (juce::MidiMessage::noteOn (10, 36, 0.1f), 0);
+    engine.processMidiBuffer (buffer, 64);
+
+    EXPECT_TRUE (buffer.getNumEvents() == 1);
+    for (const auto metadata : buffer)
+    {
+        const auto msg = metadata.getMessage();
+        EXPECT_TRUE (msg.isNoteOn());
+        // In MIDI 1.0, Note-On with velocity 0 is treated as Note-Off.
+        // It must be clamped to at least 1.
+        EXPECT_TRUE (msg.getVelocity() >= 1);
+    }
+    return 0;
+}
+
+static int testLivePadCurveSyncImmediate()
+{
+    svc::VelocityEngine engine;
+    engine.setOutputMode (svc::VelocityOutputMode::midi1);
+
+    svc::PadSettings pad;
+    pad.enabled = true;
+    pad.curve.applyPreset (svc::CurvePreset::hard);
+    engine.setPadSettings (36, 10, pad);
+
+    juce::MidiBuffer buffer;
+    buffer.addEvent (juce::MidiMessage::noteOn (10, 36, 0.5f), 0);
+    engine.processMidiBuffer (buffer, 64);
+    EXPECT_TRUE (buffer.getNumEvents() == 1);
+    int hardVel = 0;
+    for (const auto metadata : buffer)
+        hardVel = metadata.getMessage().getVelocity();
+
+    // Now switch curve to soft immediately without delay
+    pad.curve.applyPreset (svc::CurvePreset::soft);
+    engine.setPadSettings (36, 10, pad);
+
+    buffer.clear();
+    buffer.addEvent (juce::MidiMessage::noteOn (10, 36, 0.5f), 0);
+    engine.processMidiBuffer (buffer, 64);
+    EXPECT_TRUE (buffer.getNumEvents() == 1);
+    int softVel = 0;
+    for (const auto metadata : buffer)
+        softVel = metadata.getMessage().getVelocity();
+
+    // The new curve takes effect on the very next note without lag or buffering:
+    EXPECT_TRUE (softVel > hardVel);
+    return 0;
+}
+
+static int testHitEventFifoMultithreadedStress()
+{
+    svc::HitEventFifo fifo;
+    std::atomic<bool> start { false };
+    std::atomic<bool> producerDone { false };
+    std::atomic<bool> failed { false };
+    constexpr int numEvents = 50000;
+
+    std::thread producer ([&]
+    {
+        while (! start.load (std::memory_order_acquire)) {}
+        for (int i = 0; i < numEvents; ++i)
+        {
+            svc::HitEvent ev;
+            ev.note = i % 128;
+            ev.channel = (i % 16) + 1;
+            ev.inputVelocity = static_cast<float> (i % 127) / 127.0f;
+            ev.outputVelocity = ev.inputVelocity;
+            ev.timestamp = static_cast<uint64_t> (i);
+            fifo.push (ev);
+        }
+        producerDone.store (true, std::memory_order_release);
+    });
+
+    std::thread consumer ([&]
+    {
+        while (! start.load (std::memory_order_acquire)) {}
+        svc::HitEvent ev;
+        while (! producerDone.load (std::memory_order_acquire) || fifo.hasPending())
+        {
+            if (fifo.pop (ev))
+            {
+                if (ev.note < 0 || ev.note >= 128 || ev.channel < 1 || ev.channel > 16)
+                    failed.store (true, std::memory_order_relaxed);
+            }
+        }
+    });
+
+    start.store (true, std::memory_order_release);
+    producer.join();
+    consumer.join();
+    EXPECT_TRUE (! failed.load (std::memory_order_relaxed));
+    return 0;
+}
+
+static int testProfilePadMutations()
+{
+    svc::ControllerProfile profile ("Test", svc::ProfileLayout::custom);
+    svc::ProfilePad pad1;
+    pad1.midiNote = 36;
+    pad1.label = "Kick";
+    pad1.gridRow = 0; pad1.gridCol = 0;
+    EXPECT_TRUE (profile.addPad (pad1) == svc::PadMutationResult::ok);
+
+    svc::ProfilePad pad2;
+    pad2.midiNote = 38;
+    pad2.label = "Snare";
+    pad2.gridRow = 0; pad2.gridCol = 1;
+    EXPECT_TRUE (profile.addPad (pad2) == svc::PadMutationResult::ok);
+
+    // Swap pads
+    EXPECT_TRUE (profile.swapPads (0, 1) == svc::PadMutationResult::ok);
+    EXPECT_TRUE (profile.getPads()[0].label == "Snare");
+    EXPECT_TRUE (profile.getPads()[1].label == "Kick");
+    EXPECT_TRUE (profile.getPads()[0].gridRow == 0 && profile.getPads()[0].gridCol == 0);
+    EXPECT_TRUE (profile.getPads()[1].gridRow == 0 && profile.getPads()[1].gridCol == 1);
+
+    // Rename pad
+    EXPECT_TRUE (profile.renamePad (0, "Snare 2") == svc::PadMutationResult::ok);
+    EXPECT_TRUE (profile.getPads()[0].label == "Snare 2");
+
+    // Move pad to cell
+    EXPECT_TRUE (profile.movePadToCell (0, 1, 2) == svc::PadMutationResult::ok);
+    EXPECT_TRUE (profile.getPads()[0].gridRow == 1 && profile.getPads()[0].gridCol == 2);
+
+    // Duplicate pad
+    EXPECT_TRUE (profile.duplicatePad (0) == svc::PadMutationResult::ok);
+    EXPECT_TRUE (profile.getPads().size() == 3);
+    EXPECT_TRUE (profile.getPads()[2].midiNote != pad1.midiNote && profile.getPads()[2].midiNote != pad2.midiNote);
+
+    // Duplicate pad with target cell
+    EXPECT_TRUE (profile.duplicatePad (0, std::make_pair (3, 2)) == svc::PadMutationResult::ok);
+    EXPECT_TRUE (profile.getPads().size() == 4);
+    EXPECT_TRUE (profile.getPads()[3].gridRow == 3 && profile.getPads()[3].gridCol == 2);
+
+    // Duplicate pad with already occupied target cell (should safely fallback without overlapping)
+    EXPECT_TRUE (profile.duplicatePad (0, std::make_pair (3, 2)) == svc::PadMutationResult::ok);
+    EXPECT_TRUE (profile.getPads().size() == 5);
+    EXPECT_TRUE (profile.getPads()[4].gridRow != 3 || profile.getPads()[4].gridCol != 2);
+
+    // Move pad to already occupied cell should swap coordinates, preventing stacking
+    const auto oldRow0 = profile.getPads()[0].gridRow;
+    const auto oldCol0 = profile.getPads()[0].gridCol;
+    const auto destRow = profile.getPads()[3].gridRow;
+    const auto destCol = profile.getPads()[3].gridCol;
+    EXPECT_TRUE (profile.movePadToCell (0, destRow, destCol) == svc::PadMutationResult::ok);
+    EXPECT_TRUE (profile.getPads()[0].gridRow == destRow && profile.getPads()[0].gridCol == destCol);
+    EXPECT_TRUE (profile.getPads()[3].gridRow == oldRow0 && profile.getPads()[3].gridCol == oldCol0);
+
+    // Test suggestNextGridCell with columns override
+    const auto nextCell4 = profile.suggestNextGridCell (4);
+    const auto nextCell8 = profile.suggestNextGridCell (8);
+    EXPECT_TRUE (nextCell4.second < 4);
+    EXPECT_TRUE (nextCell8.second < 8);
+
+    // Test in ProfileStore
+    svc::ProfileStore store;
+    store.addPadToActive (pad1);
+    const int initialCount = static_cast<int> (store.getActiveProfile().getPads().size());
+    EXPECT_TRUE (store.duplicatePadInActive (0) == svc::PadMutationResult::ok);
+    EXPECT_TRUE (static_cast<int> (store.getActiveProfile().getPads().size()) == initialCount + 1);
+    EXPECT_TRUE (store.renamePadInActive (0, "Renamed Pad") == svc::PadMutationResult::ok);
+    EXPECT_TRUE (store.getActiveProfile().getPads()[0].label == "Renamed Pad");
+    EXPECT_TRUE (store.swapPadsInActive (0, 1) == svc::PadMutationResult::ok);
+    EXPECT_TRUE (store.getActiveProfile().getPads()[1].label == "Renamed Pad");
+
+    return 0;
+}
+
 int main()
 {
+    if (testProfilePadMutations() != 0) return 1;
     if (testVelocityCurveMonotonic() != 0) return 1;
     if (testVelocityEnginePerPadRetrigger() != 0) return 1;
     if (testProfileApplyClearsOldPads() != 0) return 1;
@@ -594,6 +843,8 @@ int main()
     if (testMidi2LutMonotonic() != 0) return 1;
     if (testInputGateThresholds() != 0) return 1;
     if (testPolyAftertouchRemap() != 0) return 1;
+    if (testZoneRoutingPolyAftertouch() != 0) return 1;
+    if (testMidiRoutingOutputChannelRemapsAllChannelMessages() != 0) return 1;
     if (testChannelPressureNoNoteZeroCollision() != 0) return 1;
     if (testHumanizeWithinBounds() != 0) return 1;
     if (testPadAddRemoveAndDuplicateKey() != 0) return 1;
@@ -607,6 +858,9 @@ int main()
     if (testGatedNoteOffSuppressed() != 0) return 1;
     if (testRetriggerDroppedNoteOffStillPasses() != 0) return 1;
     if (testHitEventFifoDropsOldestWhenFull() != 0) return 1;
+    if (testNoteOnVelocityZeroClampedToMin() != 0) return 1;
+    if (testLivePadCurveSyncImmediate() != 0) return 1;
+    if (testHitEventFifoMultithreadedStress() != 0) return 1;
     std::cout << "All engine tests passed.\n";
     return 0;
 }

@@ -2,6 +2,7 @@
 
 #include "../Engine/VelocityEngine.h"
 #include "../Profiles/ProfileStore.h"
+#include "../UI/Theme.h"
 #include <JuceHeader.h>
 
 class SuperVelocityCurveAudioProcessor : public juce::AudioProcessor,
@@ -52,12 +53,27 @@ public:
     void syncRoutingToEngine();
     void syncOutputModeToEngine();
     void injectStandaloneMidi (const juce::MidiMessage& message);
+    void injectTestNote (int note, int channel, int velocity = 100);
     void setStandaloneMidiOutput (juce::MidiOutput* output) noexcept;
     void flushStandaloneMidiOutput();
     bool hasPendingStandaloneMidiOutput() const;
 
+    std::optional<int> getCustomPadGridWidth() const noexcept { return customPadGridWidth; }
+    void setCustomPadGridWidth (std::optional<int> width);
+
+    svc::ui::ThemeMode getTheme() const noexcept { return currentTheme; }
+    void setTheme (svc::ui::ThemeMode mode);
+
+    static void setGlobalSettingsFileOverride (juce::File file) noexcept;
+    static void clearGlobalSettingsFileOverride() noexcept;
+
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+
+    svc::ui::ThemeMode currentTheme = svc::ui::ThemeMode::system;
+    std::optional<int> customPadGridWidth;
+    void loadGlobalSettings();
+    void saveGlobalSettings();
 
     svc::VelocityEngine engine;
     svc::ProfileStore profileStore;
@@ -71,6 +87,7 @@ private:
     juce::CriticalSection standaloneOutputLock;
     juce::MidiBuffer standaloneMidiOutputQueue;
     juce::MidiOutput* standaloneMidiOutput = nullptr;
+    std::shared_ptr<std::atomic<bool>> isAlive = std::make_shared<std::atomic<bool>> (true);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SuperVelocityCurveAudioProcessor)
 };

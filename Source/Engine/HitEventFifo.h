@@ -22,53 +22,74 @@ struct HitEvent
 class HitEventFifo
 {
 public:
-    static constexpr int capacity = 256;
+    static constexpr uint64_t capacity = 256;
 
     bool push (const HitEvent& event) noexcept
     {
-        const auto write = writeIndex.load (std::memory_order_relaxed);
-        const auto nextWrite = (write + 1) % capacity;
-
-        if (nextWrite == readIndex.load (std::memory_order_acquire))
-        {
-            // Drop the oldest event so the newest hits always reach the UI.
-            const auto read = readIndex.load (std::memory_order_relaxed);
-            readIndex.store ((read + 1) % capacity, std::memory_order_release);
-        }
-
-        buffer[static_cast<size_t> (write)] = event;
-        writeIndex.store (nextWrite, std::memory_order_release);
+        const auto write = writeSeq.load (std::memory_order_relaxed);
+        auto& slot = buffer[static_cast<size_t> (write % capacity)];
+        const auto v = slot.version.load (std::memory_order_relaxed);
+        slot.version.store (v + 1, std::memory_order_relaxed);
+        std::atomic_thread_fence (std::memory_order_release);
+        slot.event = event;
+        slot.version.store (v + 2, std::memory_order_release);
+        writeSeq.store (write + 1, std::memory_order_release);
         return true;
     }
 
     bool hasPending() const noexcept
     {
-        return readIndex.load (std::memory_order_acquire)
-            != writeIndex.load (std::memory_order_acquire);
+        return readSeq.load (std::memory_order_relaxed)
+            < writeSeq.load (std::memory_order_acquire);
     }
 
     bool pop (HitEvent& event) noexcept
     {
-        const auto read = readIndex.load (std::memory_order_relaxed);
+        auto read = readSeq.load (std::memory_order_relaxed);
+        const auto write = writeSeq.load (std::memory_order_acquire);
 
-        if (read == writeIndex.load (std::memory_order_acquire))
+        if (read >= write)
             return false;
 
-        event = buffer[static_cast<size_t> (read)];
-        readIndex.store ((read + 1) % capacity, std::memory_order_release);
-        return true;
+        if (write - read > capacity)
+            read = write - capacity;
+
+        auto& slot = buffer[static_cast<size_t> (read % capacity)];
+        bool success = false;
+        for (int retry = 0; retry < 3; ++retry)
+        {
+            const auto v1 = slot.version.load (std::memory_order_acquire);
+            if ((v1 & 1) != 0)
+                continue;
+            event = slot.event;
+            std::atomic_thread_fence (std::memory_order_acquire);
+            const auto v2 = slot.version.load (std::memory_order_acquire);
+            if (v1 == v2)
+            {
+                success = true;
+                break;
+            }
+        }
+
+        readSeq.store (read + 1, std::memory_order_release);
+        return success;
     }
 
     void clear() noexcept
     {
-        readIndex.store (0, std::memory_order_release);
-        writeIndex.store (0, std::memory_order_release);
+        readSeq.store (writeSeq.load (std::memory_order_acquire), std::memory_order_release);
     }
 
 private:
-    std::array<HitEvent, capacity> buffer {};
-    std::atomic<int> writeIndex { 0 };
-    std::atomic<int> readIndex { 0 };
+    struct Slot
+    {
+        std::atomic<uint32_t> version { 0 };
+        HitEvent event {};
+    };
+
+    std::array<Slot, capacity> buffer {};
+    std::atomic<uint64_t> writeSeq { 0 };
+    std::atomic<uint64_t> readSeq { 0 };
 };
 
 } // namespace svc

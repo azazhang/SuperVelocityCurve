@@ -32,20 +32,28 @@ public:
         if (toggled)
             base = juce::Colour (Theme::accentDim());
         else if (shouldDrawButtonAsDown)
-            base = base.darker (0.15f);
+            base = base.darker (0.2f);
         else if (shouldDrawButtonAsHighlighted)
             base = juce::Colour (Theme::padHover());
 
-        g.setColour (base);
+        juce::ColourGradient grad (base.brighter (0.04f), 0.0f, bounds.getY(),
+                                   base.darker (0.04f), 0.0f, bounds.getBottom(), false);
+        g.setGradientFill (grad);
         g.fillRoundedRectangle (bounds, 6.0f);
+
+        if (Theme::getMode() == ThemeMode::dark)
+        {
+            g.setColour (juce::Colours::white.withAlpha (0.06f));
+            g.drawRoundedRectangle (bounds.reduced (0.5f), 6.0f, 1.0f);
+        }
 
         if (toggled)
         {
-            g.setColour (juce::Colour (Theme::accentGold()).withAlpha (0.5f));
-            g.drawRoundedRectangle (bounds.expanded (0.5f), 5.5f, 1.0f);
+            g.setColour (juce::Colour (Theme::accentGold()).withAlpha (0.6f));
+            g.drawRoundedRectangle (bounds.expanded (0.5f), 5.5f, 1.2f);
         }
 
-        g.setColour (juce::Colour (Theme::border()).withAlpha (0.8f));
+        g.setColour (juce::Colour (Theme::border()).withAlpha (0.85f));
         g.drawRoundedRectangle (bounds, 6.0f, 1.0f);
     }
 
@@ -60,8 +68,8 @@ public:
 
         if (active)
         {
-            g.setColour (juce::Colour (Theme::accentGold()).withAlpha (0.45f));
-            g.fillRect (area.getX(), area.getBottom() - 2.0f, area.getWidth(), 2.0f);
+            g.setColour (juce::Colour (Theme::accent()).withAlpha (0.85f));
+            g.fillRoundedRectangle (area.getX() + 4.0f, area.getBottom() - 2.5f, area.getWidth() - 8.0f, 2.0f, 1.0f);
         }
 
         g.setColour (juce::Colour (Theme::textPrimary()).withAlpha (active ? 1.0f : 0.75f));
@@ -82,25 +90,29 @@ public:
                           juce::Justification::centred, 1);
     }
 
-    void drawComboBox (juce::Graphics& g, int width, int height, bool,
-                       int, int, int, int, juce::ComboBox& box) override
+    void drawComboBox (juce::Graphics& g, int width, int height, bool isButtonDown,
+                       int buttonX, int buttonY, int buttonW, int buttonH, juce::ComboBox& box) override
     {
+        juce::ignoreUnused (isButtonDown, buttonX, buttonY, buttonW, buttonH);
         auto bounds = juce::Rectangle<float> (0.0f, 0.0f, static_cast<float> (width), static_cast<float> (height)).reduced (0.5f);
         Theme::fillPanel (g, bounds, 5.0f);
 
         if (box.hasKeyboardFocus (false))
         {
-            g.setColour (juce::Colour (Theme::accent()).withAlpha (0.35f));
-            g.drawRoundedRectangle (bounds.expanded (0.5f), 5.5f, 1.0f);
+            g.setColour (juce::Colour (Theme::accent()).withAlpha (0.45f));
+            g.drawRoundedRectangle (bounds.expanded (0.5f), 5.5f, 1.2f);
         }
 
-        const auto arrowZone = bounds.removeFromRight (18.0f).reduced (4.0f, 6.0f);
-        juce::Path arrow;
-        arrow.addTriangle (arrowZone.getCentreX() - 4.0f, arrowZone.getCentreY() - 2.0f,
-                           arrowZone.getCentreX() + 4.0f, arrowZone.getCentreY() - 2.0f,
-                           arrowZone.getCentreX(), arrowZone.getCentreY() + 3.0f);
+        const auto arrowZone = bounds.removeFromRight (20.0f).reduced (5.0f, 7.0f);
+        juce::Path chevron;
+        const float midX = arrowZone.getCentreX();
+        const float midY = arrowZone.getCentreY();
+        chevron.startNewSubPath (midX - 3.5f, midY - 1.5f);
+        chevron.lineTo (midX, midY + 2.0f);
+        chevron.lineTo (midX + 3.5f, midY - 1.5f);
+
         g.setColour (box.findColour (juce::ComboBox::arrowColourId));
-        g.fillPath (arrow);
+        g.strokePath (chevron, juce::PathStrokeType (1.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     }
 
     juce::Label* createComboBoxTextBox (juce::ComboBox& box) override
@@ -139,7 +151,7 @@ public:
         g.setColour (label.findColour (juce::Label::textColourId).withMultipliedAlpha (alpha));
         g.setFont (label.getFont());
         g.drawFittedText (label.getText(), label.getLocalBounds().reduced (1),
-                          label.getJustificationType(), juce::jmax (1, (int) (label.getHeight() / label.getFont().getHeight())),
+                          label.getJustificationType(), juce::jmax (1, static_cast<int> (static_cast<float> (label.getHeight()) / label.getFont().getHeight())),
                           label.getMinimumHorizontalScale());
     }
 
@@ -153,14 +165,14 @@ public:
         auto tick = bounds.removeFromLeft (tickSize).withSizeKeepingCentre (tickSize, tickSize);
 
         g.setColour (juce::Colour (Theme::panelRaised()));
-        g.fillRoundedRectangle (tick, 3.0f);
+        g.fillRoundedRectangle (tick, 3.5f);
         g.setColour (juce::Colour (Theme::border()));
-        g.drawRoundedRectangle (tick, 3.0f, 1.0f);
+        g.drawRoundedRectangle (tick, 3.5f, 1.0f);
 
         if (button.getToggleState())
         {
             g.setColour (juce::Colour (Theme::accentGold()));
-            g.fillRoundedRectangle (tick.reduced (4.0f), 2.0f);
+            g.fillRoundedRectangle (tick.reduced (3.5f), 2.0f);
         }
 
         g.setColour (button.findColour (juce::ToggleButton::textColourId));
@@ -182,51 +194,70 @@ public:
             return;
         }
 
-        const auto trackWidth = juce::jmin (6.0f, slider.isHorizontal() ? (float) height * 0.25f : (float) width * 0.25f);
+        const bool isHorizontal = slider.isHorizontal();
         const auto trackBounds = juce::Rectangle<float> (static_cast<float> (x), static_cast<float> (y),
-                                                       static_cast<float> (width), static_cast<float> (height));
+                                                         static_cast<float> (width), static_cast<float> (height));
+        const float trackThickness = juce::jlimit (4.0f, 6.0f, isHorizontal ? trackBounds.getHeight() * 0.22f
+                                                                            : trackBounds.getWidth() * 0.22f);
 
-        juce::Path track;
-        if (slider.isHorizontal())
+        juce::Rectangle<float> bgTrack;
+        if (isHorizontal)
         {
-            const auto yMid = trackBounds.getCentreY();
-            track.startNewSubPath (trackBounds.getX(), yMid);
-            track.lineTo (trackBounds.getRight(), yMid);
+            const float trackY = trackBounds.getCentreY() - trackThickness * 0.5f;
+            bgTrack = { trackBounds.getX(), trackY, trackBounds.getWidth(), trackThickness };
         }
         else
         {
-            const auto xMid = trackBounds.getCentreX();
-            track.startNewSubPath (xMid, trackBounds.getBottom());
-            track.lineTo (xMid, trackBounds.getY());
+            const float trackX = trackBounds.getCentreX() - trackThickness * 0.5f;
+            bgTrack = { trackX, trackBounds.getY(), trackThickness, trackBounds.getHeight() };
         }
 
-        g.setColour (slider.findColour (juce::Slider::backgroundColourId));
-        g.strokePath (track, { trackWidth, juce::PathStrokeType::curved, juce::PathStrokeType::rounded });
+        g.setColour (slider.findColour (juce::Slider::backgroundColourId).darker (0.2f));
+        g.fillRoundedRectangle (bgTrack, trackThickness * 0.5f);
+        g.setColour (slider.findColour (juce::Slider::backgroundColourId).brighter (0.12f));
+        g.drawRoundedRectangle (bgTrack, trackThickness * 0.5f, 0.8f);
 
         juce::Point<float> thumbPoint;
-        if (slider.isHorizontal())
+        if (isHorizontal)
+        {
             thumbPoint = { sliderPos, trackBounds.getCentreY() };
+            const float activeW = juce::jmax (0.0f, sliderPos - trackBounds.getX());
+            auto activeRect = juce::Rectangle<float> (trackBounds.getX(), bgTrack.getY(), activeW, trackThickness);
+            
+            juce::ColourGradient activeGrad (juce::Colour (Theme::accentDim()), activeRect.getX(), activeRect.getY(),
+                                             juce::Colour (Theme::accent()), activeRect.getRight(), activeRect.getY(), false);
+            g.setGradientFill (activeGrad);
+            g.fillRoundedRectangle (activeRect, trackThickness * 0.5f);
+        }
         else
+        {
             thumbPoint = { trackBounds.getCentreX(), sliderPos };
+            const float activeH = juce::jmax (0.0f, trackBounds.getBottom() - sliderPos);
+            auto activeRect = juce::Rectangle<float> (bgTrack.getX(), sliderPos, trackThickness, activeH);
 
-        juce::Path valueTrack;
-        if (slider.isHorizontal())
-        {
-            valueTrack.startNewSubPath (trackBounds.getX(), trackBounds.getCentreY());
-            valueTrack.lineTo (thumbPoint.x, thumbPoint.y);
-        }
-        else
-        {
-            valueTrack.startNewSubPath (trackBounds.getCentreX(), trackBounds.getBottom());
-            valueTrack.lineTo (thumbPoint.x, thumbPoint.y);
+            juce::ColourGradient activeGrad (juce::Colour (Theme::accent()), activeRect.getX(), activeRect.getY(),
+                                             juce::Colour (Theme::accentDim()), activeRect.getX(), activeRect.getBottom(), false);
+            g.setGradientFill (activeGrad);
+            g.fillRoundedRectangle (activeRect, trackThickness * 0.5f);
         }
 
-        g.setColour (slider.findColour (juce::Slider::trackColourId));
-        g.strokePath (valueTrack, { trackWidth, juce::PathStrokeType::curved, juce::PathStrokeType::rounded });
+        const float thumbRadius = juce::jlimit (6.0f, 9.0f, isHorizontal ? trackBounds.getHeight() * 0.38f
+                                                                         : trackBounds.getWidth() * 0.38f);
+        auto thumbRect = juce::Rectangle<float> (thumbRadius * 2.0f, thumbRadius * 2.0f).withCentre (thumbPoint);
 
-        const auto thumbSize = juce::jmin (14.0f, slider.isHorizontal() ? (float) height * 0.72f : (float) width * 0.72f);
-        g.setColour (slider.findColour (juce::Slider::thumbColourId));
-        g.fillEllipse (juce::Rectangle<float> (thumbSize, thumbSize).withCentre (thumbPoint));
+        g.setColour (juce::Colour (Theme::accent()).withAlpha (0.25f));
+        g.fillEllipse (thumbRect.expanded (2.5f));
+
+        g.setColour (juce::Colour (Theme::panelRaised()));
+        g.fillEllipse (thumbRect);
+
+        g.setColour (juce::Colour (Theme::accent()));
+        g.fillEllipse (thumbRect.reduced (thumbRadius * 0.45f));
+
+        g.setColour (Theme::getMode() == ThemeMode::dark
+                         ? juce::Colours::white.withAlpha (0.75f)
+                         : juce::Colour (Theme::borderBright()));
+        g.drawEllipse (thumbRect, 1.2f);
     }
 
 private:
@@ -236,7 +267,7 @@ private:
         setColour (juce::ComboBox::backgroundColourId, juce::Colour (Theme::panelRaised()));
         setColour (juce::ComboBox::textColourId, juce::Colour (Theme::textPrimary()));
         setColour (juce::ComboBox::outlineColourId, juce::Colour (Theme::border()));
-        setColour (juce::ComboBox::arrowColourId, juce::Colour (Theme::accentGold()));
+        setColour (juce::ComboBox::arrowColourId, juce::Colour (Theme::accent()));
         setColour (juce::PopupMenu::backgroundColourId, juce::Colour (Theme::panelRaised()));
         setColour (juce::PopupMenu::textColourId, juce::Colour (Theme::textPrimary()));
         setColour (juce::PopupMenu::highlightedBackgroundColourId, juce::Colour (Theme::accentDim()));
@@ -252,9 +283,9 @@ private:
         setColour (juce::ToggleButton::tickColourId, juce::Colour (Theme::accentGold()));
         setColour (juce::ToggleButton::tickDisabledColourId, juce::Colour (Theme::border()));
         setColour (juce::Label::backgroundColourId, juce::Colours::transparentBlack);
-        setColour (juce::Slider::thumbColourId, juce::Colour (Theme::accentGold()));
-        setColour (juce::Slider::trackColourId, juce::Colour (Theme::border()));
-        setColour (juce::Slider::backgroundColourId, juce::Colour (Theme::panelRaised()));
+        setColour (juce::Slider::thumbColourId, juce::Colour (Theme::accent()));
+        setColour (juce::Slider::trackColourId, juce::Colour (Theme::accentDim()));
+        setColour (juce::Slider::backgroundColourId, juce::Colour (Theme::padIdle()));
         setColour (juce::Slider::textBoxTextColourId, juce::Colour (Theme::textPrimary()));
         setColour (juce::Slider::textBoxBackgroundColourId, juce::Colour (Theme::panelRaised()));
         setColour (juce::Slider::textBoxOutlineColourId, juce::Colour (Theme::border()));

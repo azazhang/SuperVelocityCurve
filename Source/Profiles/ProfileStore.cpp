@@ -168,6 +168,38 @@ PadMutationResult ProfileStore::removePadFromActive (int index)
     return result;
 }
 
+PadMutationResult ProfileStore::swapPadsInActive (int indexA, int indexB)
+{
+    const auto result = activeProfile.swapPads (indexA, indexB);
+    if (result == PadMutationResult::ok)
+        syncActiveUserProfileFromEdits();
+    return result;
+}
+
+PadMutationResult ProfileStore::movePadInActive (int index, int targetRow, int targetCol)
+{
+    const auto result = activeProfile.movePadToCell (index, targetRow, targetCol);
+    if (result == PadMutationResult::ok)
+        syncActiveUserProfileFromEdits();
+    return result;
+}
+
+PadMutationResult ProfileStore::duplicatePadInActive (int sourceIndex, std::optional<std::pair<int, int>> targetCell)
+{
+    const auto result = activeProfile.duplicatePad (sourceIndex, targetCell);
+    if (result == PadMutationResult::ok)
+        syncActiveUserProfileFromEdits();
+    return result;
+}
+
+PadMutationResult ProfileStore::renamePadInActive (int index, const juce::String& newLabel)
+{
+    const auto result = activeProfile.renamePad (index, newLabel);
+    if (result == PadMutationResult::ok)
+        syncActiveUserProfileFromEdits();
+    return result;
+}
+
 bool ProfileStore::deleteUserProfile (int index)
 {
     if (index < 0 || index >= static_cast<int> (userProfiles.size()))

@@ -18,6 +18,8 @@ constexpr int kStandaloneGap = 4;
 constexpr int kToolbarHeight = 118;
 constexpr int kLiveHitsRowHeight = 20;
 constexpr int kBottomSectionsTrailingPad = 8;
+constexpr int kSplitterWidth = 6;
+constexpr int kMinPadGridWidth = 180;
 
 struct SectionStackHeights
 {
@@ -32,12 +34,14 @@ struct EditorLayoutInputs
     bool hasStandaloneMidiPanel = false;
     bool padSettingsExpanded = true;
     SectionStackHeights bottomSections;
+    std::optional<int> customPadGridWidth;
 };
 
 struct EditorLayoutResult
 {
     juce::Rectangle<int> curveEditorBounds;
     juce::Rectangle<int> padGridBounds;
+    juce::Rectangle<int> splitterBounds;
     juce::Rectangle<int> padSettingsBounds;
     int bottomSectionsTotal = 0;
 };

@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## v0.2.29 (2026-09-18)
+
+### Added
+- **UI:** Interactive vertical splitter bar between Pad Layout and Curve Editor, allowing continuous dragging, double-click reset to default width, and persistent layout state.
+- **Workflow:** Sound preview auditioning toggle in the toolbar for instant MIDI note playback on pad selection.
+- **Workflow:** Scoped single-step curve undo/redo via toolbar button and ⌘Z / Ctrl+Z keyboard shortcuts.
+- **Workflow:** A/B Compare floating gold indicator banner (`[ AUDITIONING CAPTURED A ]`) in the curve plot.
+- **UI:** Pad dynamics micro-meters showing velocity range (gate to ceiling) across all pads, with support for inverted curves.
+- **UI:** Multi-column view options (1, 2, 4, 8, 16 columns) with grid reorganization and inline pad renaming.
+
+### Fixed
+- **Standalone:** Asynchronous background MIDI device enumeration to avoid UI blocking on startup.
+- **Engine:** Destruction-safe test note injection preventing potential race conditions during rapid instance teardown.
+
 ## v0.2.28 (2026-06-24)
 
 ### Fixed

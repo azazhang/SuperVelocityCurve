@@ -100,7 +100,9 @@ private:
         int outputChannel = 1;
     };
 
-    std::atomic<EngineState*> activeState { nullptr };
+    mutable juce::SpinLock stateLock;
+    std::unique_ptr<EngineState> activeState;
+    EngineState uiState;
 
     std::array<ActiveVoice, kMidiNoteChannelSlots> activeVoices {};
     std::array<std::atomic<int64_t>, kMidiNoteChannelSlots> retriggerLastTimeUs {};
@@ -115,7 +117,7 @@ private:
     const PadSettings* findPad (int note, int channel) const;
     float processNoteVelocity (const PadSettings& pad, float inputNormalized, const EngineProcessingSettings& processing) const;
     float applyHumanize (float normalized, float humanizeAmount) const;
-    int resolveOutputChannel (PadGroup group, int incomingChannel) const;
+    int resolveOutputChannel (const EngineState& state, PadGroup group, int incomingChannel) const;
     VelocityEncoding encodeAndApplyOutput (juce::MidiMessage& message,
                                            float outputNormalized,
                                            bool inputIsMidi2) const;

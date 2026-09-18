@@ -15,16 +15,24 @@ public:
     void paint (juce::Graphics& g) override;
     void resized() override;
 
+    void scanDevicesAsync();
+    void populateDeviceLists (const juce::Array<juce::MidiDeviceInfo>& inputs,
+                              const juce::Array<juce::MidiDeviceInfo>& outputs);
+    bool isDeviceScanning() const noexcept { return scanning.load(); }
+
 private:
     juce::ComboBox inputDeviceBox;
     juce::ComboBox outputDeviceBox;
-    juce::Label inputLabel { {}, "MIDI Input" };
-    juce::Label outputLabel { {}, "MIDI Output" };
+    juce::Label inputLabel { {}, "MIDI In" };
+    juce::Label outputLabel { {}, "MIDI Out" };
     juce::Label statusLabel;
     std::unique_ptr<juce::MidiInput> activeInput;
     std::unique_ptr<juce::MidiOutput> activeOutput;
 
-    void refreshDeviceLists();
+    juce::Array<juce::MidiDeviceInfo> cachedInputs;
+    juce::Array<juce::MidiDeviceInfo> cachedOutputs;
+    std::atomic<bool> scanning { false };
+
     void connectInput (int index);
     void connectOutput (int index);
     void handleIncomingMidiMessage (juce::MidiInput*, const juce::MidiMessage& message) override;

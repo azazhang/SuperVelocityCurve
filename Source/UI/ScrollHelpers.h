@@ -18,7 +18,7 @@ inline void styleScrollbar (juce::ScrollBar& bar)
 inline void configureVerticalViewport (juce::Viewport& viewport)
 {
     viewport.setScrollBarsShown (false, false);
-    viewport.setScrollOnDragEnabled (true);
+    viewport.setScrollOnDragMode (juce::Viewport::ScrollOnDragMode::all);
     styleScrollbar (viewport.getVerticalScrollBar());
 }
 
@@ -32,7 +32,7 @@ inline void updateVerticalScrollbarVisibility (juce::Viewport& viewport, const j
 inline void configurePadGridViewport (juce::Viewport& viewport)
 {
     viewport.setScrollBarsShown (false, false);
-    viewport.setScrollOnDragEnabled (true);
+    viewport.setScrollOnDragMode (juce::Viewport::ScrollOnDragMode::never);
     styleScrollbar (viewport.getVerticalScrollBar());
     styleScrollbar (viewport.getHorizontalScrollBar());
 }
