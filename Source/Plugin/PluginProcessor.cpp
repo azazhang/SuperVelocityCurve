@@ -90,12 +90,10 @@ void SuperVelocityCurveAudioProcessor::injectTestNote (int note, int channel, in
 
     injectStandaloneMidi (juce::MidiMessage::noteOn (ch, n, static_cast<juce::uint8> (vel)));
 
-    auto aliveToken = isAlive;
-    juce::Timer::callAfterDelay (120, [this, aliveToken, ch, n]
-    {
-        if (aliveToken && aliveToken->load())
-            injectStandaloneMidi (juce::MidiMessage::noteOff (ch, n, static_cast<juce::uint8> (0)));
-    });
+    const double sr = getSampleRate();
+    testNoteOffSamplesRemaining.store (static_cast<int> (sr > 0.0 ? sr * 0.12 : 5760.0));
+    testNoteOffChannel.store (ch);
+    testNoteOffNote.store (n);
 }
 
 
@@ -116,6 +114,8 @@ SuperVelocityCurveAudioProcessor::~SuperVelocityCurveAudioProcessor()
 {
     if (isAlive)
         *isAlive = false;
+    testNoteOffSamplesRemaining.store (0);
+    testNoteOffNote.store (-1);
     apvts.removeParameterListener ("outputMode", this);
 }
 
@@ -225,6 +225,24 @@ void SuperVelocityCurveAudioProcessor::processBlock (juce::AudioBuffer<float>& b
         for (const auto metadata : standaloneMidiQueue)
             midiMessages.addEvent (metadata.getMessage(), metadata.samplePosition);
         standaloneMidiQueue.clear();
+    }
+
+    const int remaining = testNoteOffSamplesRemaining.load();
+    if (remaining > 0)
+    {
+        const int numSamples = buffer.getNumSamples();
+        if (remaining <= numSamples)
+        {
+            testNoteOffSamplesRemaining.store (0);
+            const int note = testNoteOffNote.exchange (-1);
+            const int ch = testNoteOffChannel.load();
+            if (note >= 0)
+                injectStandaloneMidi (juce::MidiMessage::noteOff (ch, note, static_cast<juce::uint8> (0)));
+        }
+        else
+        {
+            testNoteOffSamplesRemaining.store (remaining - numSamples);
+        }
     }
 
     engine.processMidiBuffer (midiMessages, buffer.getNumSamples());

@@ -36,4 +36,17 @@ private:
     void connectInput (int index);
     void connectOutput (int index);
     void handleIncomingMidiMessage (juce::MidiInput*, const juce::MidiMessage& message) override;
+
+    class ScannerThread : public juce::Thread
+    {
+    public:
+        ScannerThread (StandaloneMidiPanel& owner);
+        ~ScannerThread() override;
+        void run() override;
+
+    private:
+        StandaloneMidiPanel& panel;
+    };
+
+    std::unique_ptr<ScannerThread> scannerThread;
 };

@@ -24,8 +24,47 @@ StandaloneMidiPanel::StandaloneMidiPanel()
     scanDevicesAsync();
 }
 
+StandaloneMidiPanel::ScannerThread::ScannerThread (StandaloneMidiPanel& owner)
+    : juce::Thread ("MidiDeviceScanner"), panel (owner)
+{
+}
+
+StandaloneMidiPanel::ScannerThread::~ScannerThread()
+{
+    stopThread (1000);
+}
+
+void StandaloneMidiPanel::ScannerThread::run()
+{
+    const auto inputs = juce::MidiInput::getAvailableDevices();
+    if (threadShouldExit())
+        return;
+
+    const auto outputs = juce::MidiOutput::getAvailableDevices();
+    if (threadShouldExit())
+        return;
+
+    if (auto* mm = juce::MessageManager::getInstanceWithoutCreating())
+    {
+        mm->callAsync ([safe = juce::Component::SafePointer<StandaloneMidiPanel> (&panel), inputs, outputs]
+        {
+            if (safe != nullptr)
+            {
+                safe->scanning = false;
+                safe->populateDeviceLists (inputs, outputs);
+            }
+        });
+    }
+}
+
 StandaloneMidiPanel::~StandaloneMidiPanel()
 {
+    if (scannerThread != nullptr)
+    {
+        scannerThread->signalThreadShouldExit();
+        scannerThread->stopThread (1000);
+        scannerThread.reset();
+    }
     activeInput.reset();
     activeOutput.reset();
 }
@@ -35,22 +74,8 @@ void StandaloneMidiPanel::scanDevicesAsync()
     if (scanning.exchange (true))
         return;
 
-    juce::Component::SafePointer<StandaloneMidiPanel> safe (this);
-
-    juce::Thread::launch ([safe]
-    {
-        const auto inputs = juce::MidiInput::getAvailableDevices();
-        const auto outputs = juce::MidiOutput::getAvailableDevices();
-
-        juce::MessageManager::callAsync ([safe, inputs, outputs]
-        {
-            if (safe != nullptr)
-            {
-                safe->scanning = false;
-                safe->populateDeviceLists (inputs, outputs);
-            }
-        });
-    });
+    scannerThread = std::make_unique<ScannerThread> (*this);
+    scannerThread->startThread();
 }
 
 void StandaloneMidiPanel::populateDeviceLists (const juce::Array<juce::MidiDeviceInfo>& inputs,

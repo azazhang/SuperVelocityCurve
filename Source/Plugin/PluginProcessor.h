@@ -88,6 +88,9 @@ private:
     juce::MidiBuffer standaloneMidiOutputQueue;
     juce::MidiOutput* standaloneMidiOutput = nullptr;
     std::shared_ptr<std::atomic<bool>> isAlive = std::make_shared<std::atomic<bool>> (true);
+    std::atomic<int> testNoteOffSamplesRemaining { 0 };
+    std::atomic<int> testNoteOffChannel { 1 };
+    std::atomic<int> testNoteOffNote { -1 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SuperVelocityCurveAudioProcessor)
 };

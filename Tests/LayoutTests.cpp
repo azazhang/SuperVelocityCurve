@@ -830,7 +830,7 @@ static int testCurveUndoRestore()
     presetBox->setSelectedId (2, juce::sendNotificationSync);
 
     const auto modifiedPoints = processor.getProfileStore().getActiveProfile().getPads()[0].curve.getControlPoints();
-    EXPECT_TRUE (modifiedPoints.size() != origPoints.size() || modifiedPoints[1].output != origPoints[1].output);
+    EXPECT_TRUE (modifiedPoints.size() != origPoints.size() || std::abs (modifiedPoints[1].output - origPoints[1].output) > 0.001f);
 
     // Human presses Cmd+Z / triggers undo
     const juce::KeyPress cmdZ ('z', juce::ModifierKeys::commandModifier, 0);
@@ -882,38 +882,50 @@ static int testAuditionCompareFloatingBannerState()
     return 0;
 }
 
+#define RUN_TEST(fn) \
+    do { \
+        std::cout << "[ RUN      ] " #fn << std::endl; \
+        const int res = fn(); \
+        if (res != 0) { \
+            std::cerr << "[  FAILED  ] " #fn " returned " << res << std::endl; \
+            return res; \
+        } \
+        std::cout << "[       OK ] " #fn << std::endl; \
+    } while (false)
+
 int main()
 {
     juce::ScopedJuceInitialiser_GUI gui;
 
-    if (testMinWindowCurveVisible() != 0) return 1;
-    if (testDefaultWindowWithCollapsedBottomSections() != 0) return 1;
-    if (testSectionContentHeightClamped() != 0) return 1;
-    if (testCollapsibleSectionHeights() != 0) return 1;
-    if (testPadUiMergePreservesCurvePoints() != 0) return 1;
-    if (testLaunchpadGridHorizontalScroll() != 0) return 1;
-    if (testLaunchpadGridVerticalScrollbarWithoutResize() != 0) return 1;
-    if (testMidiNoteDisplayFormat() != 0) return 1;
-    if (testInvalidStateDoesNotCrash() != 0) return 1;
-    if (testProcessorStateRoundtrip() != 0) return 1;
-    if (testHeadlessEditorMinLayout() != 0) return 1;
-    if (testStateAfterEditorDestroyed() != 0) return 1;
-    if (testEditorStateRoundtrip() != 0) return 1;
-    if (testThemePersistenceRoundtrip() != 0) return 1;
-    if (testEditorLayoutBottomSectionsClampMinCurveHeight() != 0) return 1;
-    if (testPadGridColumnsNoOverlap() != 0) return 1;
-    if (testPadGridCellMappingAndClamping() != 0) return 1;
-    if (testPadGridInlineEditing() != 0) return 1;
-    if (testHumanUserWorkflowSimulation() != 0) return 1;
-    if (testPadDragAndScrollIndependence() != 0) return 1;
-    if (testStandaloneMidiPanelAsyncInit() != 0) return 1;
-    if (testHeaderAndToolbarLayoutConsistency() != 0) return 1;
-    if (testPadGridSplitterResize() != 0) return 1;
-    if (testPadGridSplitterPersistenceAndReset() != 0) return 1;
-    if (testAuditionTestNoteInjection() != 0) return 1;
-    if (testCurveUndoRestore() != 0) return 1;
-    if (testAuditionCompareFloatingBannerState() != 0) return 1;
-    std::cout << "All layout tests passed.\n";
+    RUN_TEST (testMinWindowCurveVisible);
+    RUN_TEST (testDefaultWindowWithCollapsedBottomSections);
+    RUN_TEST (testSectionContentHeightClamped);
+    RUN_TEST (testCollapsibleSectionHeights);
+    RUN_TEST (testPadUiMergePreservesCurvePoints);
+    RUN_TEST (testLaunchpadGridHorizontalScroll);
+    RUN_TEST (testLaunchpadGridVerticalScrollbarWithoutResize);
+    RUN_TEST (testMidiNoteDisplayFormat);
+    RUN_TEST (testInvalidStateDoesNotCrash);
+    RUN_TEST (testProcessorStateRoundtrip);
+    RUN_TEST (testHeadlessEditorMinLayout);
+    RUN_TEST (testStateAfterEditorDestroyed);
+    RUN_TEST (testEditorStateRoundtrip);
+    RUN_TEST (testThemePersistenceRoundtrip);
+    RUN_TEST (testEditorLayoutBottomSectionsClampMinCurveHeight);
+    RUN_TEST (testPadGridColumnsNoOverlap);
+    RUN_TEST (testPadGridCellMappingAndClamping);
+    RUN_TEST (testPadGridInlineEditing);
+    RUN_TEST (testHumanUserWorkflowSimulation);
+    RUN_TEST (testPadDragAndScrollIndependence);
+    RUN_TEST (testStandaloneMidiPanelAsyncInit);
+    RUN_TEST (testHeaderAndToolbarLayoutConsistency);
+    RUN_TEST (testPadGridSplitterResize);
+    RUN_TEST (testPadGridSplitterPersistenceAndReset);
+    RUN_TEST (testAuditionTestNoteInjection);
+    RUN_TEST (testCurveUndoRestore);
+    RUN_TEST (testAuditionCompareFloatingBannerState);
+
+    std::cout << "All layout tests passed." << std::endl;
     return 0;
 }
 
