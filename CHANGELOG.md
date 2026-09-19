@@ -13,6 +13,10 @@
 - **UI:** Multi-column view options (1, 2, 4, 8, 16 columns) with grid reorganization and inline pad renaming.
 
 ### Fixed
+- **Audio Thread:** Sample-accurate lock-free audition note-off injection inside `processBlock`.
+- **UI:** Deferred settings disk persistence on pad layout splitter resize until mouse release to avoid disk I/O thrashing.
+- **UI:** Guarded asynchronous context menu callbacks with `SafePointer` to prevent use-after-free on component destruction.
+- **UI:** Invalidated curve undo state on pad deletion and pad swap with bounds checking to prevent out-of-range restorations.
 - **Standalone:** Asynchronous background MIDI device enumeration to avoid UI blocking on startup.
 - **Engine:** Destruction-safe test note injection preventing potential race conditions during rapid instance teardown.
 

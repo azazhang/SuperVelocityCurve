@@ -14,6 +14,7 @@ public:
 
     std::function<void (int deltaX)> onResizeDelta;
     std::function<void()> onResetToDefault;
+    std::function<void()> onResizeEnd;
 
     void mouseEnter (const juce::MouseEvent&) override
     {
@@ -50,6 +51,8 @@ public:
     {
         isDragging = false;
         repaint();
+        if (onResizeEnd)
+            onResizeEnd();
     }
 
     void mouseDoubleClick (const juce::MouseEvent&) override

@@ -157,12 +157,16 @@ SuperVelocityCurveAudioProcessorEditor::SuperVelocityCurveAudioProcessorEditor (
         const int available = getWidth() - (padSettingsSection.isExpanded() ? 220 : 30) - svc::ui::layout::kMinCurvePlotWidth - 60;
         const int maxW = std::max (svc::ui::layout::kMinPadGridWidth, available);
         const int newWidth = juce::jlimit (svc::ui::layout::kMinPadGridWidth, maxW, currentWidth + deltaX);
-        audioProcessor.setCustomPadGridWidth (newWidth);
+        audioProcessor.setCustomPadGridWidth (newWidth, false);
         resized();
+    };
+    padGridResizer.onResizeEnd = [this]
+    {
+        audioProcessor.saveGlobalSettings();
     };
     padGridResizer.onResetToDefault = [this]
     {
-        audioProcessor.setCustomPadGridWidth (std::nullopt);
+        audioProcessor.setCustomPadGridWidth (std::nullopt, true);
         resized();
     };
     addAndMakeVisible (curveEditor);
@@ -257,6 +261,8 @@ SuperVelocityCurveAudioProcessorEditor::SuperVelocityCurveAudioProcessorEditor (
 
         audioProcessor.getEngine().clearPadHistogram (removedNote, removedChannel);
         clearAbCompare();
+        undoCurveState.reset();
+        undoCurveButton.setEnabled (false);
         applyProfileToEngine();
         const auto newIndex = juce::jlimit (0,
                                            static_cast<int> (store.getActiveProfile().getPads().size()) - 1,
@@ -279,6 +285,8 @@ SuperVelocityCurveAudioProcessorEditor::SuperVelocityCurveAudioProcessorEditor (
             return;
         }
 
+        undoCurveState.reset();
+        undoCurveButton.setEnabled (false);
         applyProfileToEngine();
         selectedPadIndex = -1;
         refreshPadUI (false);
@@ -1611,6 +1619,14 @@ void SuperVelocityCurveAudioProcessorEditor::performCurveUndo()
     }
 
     const auto undoState = *undoCurveState;
+    const auto& profile = audioProcessor.getProfileStore().getActiveProfile();
+    if (undoState.padIndex < 0 || undoState.padIndex >= static_cast<int> (profile.getPads().size()))
+    {
+        undoCurveState.reset();
+        undoCurveButton.setEnabled (false);
+        showStatus ("Cannot undo: pad no longer exists.", true);
+        return;
+    }
 
     if (undoState.padIndex != selectedPadIndex)
     {

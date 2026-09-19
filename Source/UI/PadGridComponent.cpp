@@ -278,25 +278,29 @@ void PadGridComponent::PadCanvas::mouseDown (const juce::MouseEvent& event)
             menu.addSeparator();
             menu.addItem (7, "Delete Pad", owner.currentProfile.getPads().size() > 1);
 
+            juce::Component::SafePointer<PadCanvas> safeThis (this);
             menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this)
                                                          .withTargetScreenArea (juce::Rectangle<int> (event.getScreenPosition().x, event.getScreenPosition().y, 1, 1)),
-                                [this, index] (int result)
+                                [safeThis, index] (int result)
                                 {
+                                    if (safeThis == nullptr)
+                                        return;
+                                    auto& grid = safeThis->owner;
                                     if (result == 1)
-                                        owner.startInlineEditing (index);
-                                     else if (result == 2 && owner.onPadDuplicateRequested)
-                                        owner.onPadDuplicateRequested (index, std::nullopt);
-                                     else if (result == 3 && owner.onLearnMidiRequested)
-                                         owner.onLearnMidiRequested (index);
-                                     else if (result == 4 && owner.onCopyCurveRequested)
-                                         owner.onCopyCurveRequested (index);
-                                     else if (result == 5 && owner.onPasteCurveRequested)
-                                         owner.onPasteCurveRequested (index);
-                                     else if (result == 6 && owner.onResetCurveRequested)
-                                         owner.onResetCurveRequested (index);
-                                     else if (result == 7 && owner.onDeletePadRequested)
-                                         owner.onDeletePadRequested();
-                                 });
+                                        grid.startInlineEditing (index);
+                                    else if (result == 2 && grid.onPadDuplicateRequested)
+                                        grid.onPadDuplicateRequested (index, std::nullopt);
+                                    else if (result == 3 && grid.onLearnMidiRequested)
+                                        grid.onLearnMidiRequested (index);
+                                    else if (result == 4 && grid.onCopyCurveRequested)
+                                        grid.onCopyCurveRequested (index);
+                                    else if (result == 5 && grid.onPasteCurveRequested)
+                                        grid.onPasteCurveRequested (index);
+                                    else if (result == 6 && grid.onResetCurveRequested)
+                                        grid.onResetCurveRequested (index);
+                                    else if (result == 7 && grid.onDeletePadRequested)
+                                        grid.onDeletePadRequested();
+                                });
         }
         return;
     }

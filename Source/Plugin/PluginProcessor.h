@@ -59,7 +59,8 @@ public:
     bool hasPendingStandaloneMidiOutput() const;
 
     std::optional<int> getCustomPadGridWidth() const noexcept { return customPadGridWidth; }
-    void setCustomPadGridWidth (std::optional<int> width);
+    void setCustomPadGridWidth (std::optional<int> width, bool saveSettings = true);
+    void saveGlobalSettings();
 
     svc::ui::ThemeMode getTheme() const noexcept { return currentTheme; }
     void setTheme (svc::ui::ThemeMode mode);
@@ -73,7 +74,6 @@ private:
     svc::ui::ThemeMode currentTheme = svc::ui::ThemeMode::system;
     std::optional<int> customPadGridWidth;
     void loadGlobalSettings();
-    void saveGlobalSettings();
 
     svc::VelocityEngine engine;
     svc::ProfileStore profileStore;

@@ -71,13 +71,14 @@ void SuperVelocityCurveAudioProcessor::setTheme (svc::ui::ThemeMode mode)
     }
 }
 
-void SuperVelocityCurveAudioProcessor::setCustomPadGridWidth (std::optional<int> width)
+void SuperVelocityCurveAudioProcessor::setCustomPadGridWidth (std::optional<int> width, bool saveSettings)
 {
     const auto clamped = width.has_value() ? std::make_optional (std::max (180, *width)) : std::nullopt;
     if (customPadGridWidth != clamped)
     {
         customPadGridWidth = clamped;
-        saveGlobalSettings();
+        if (saveSettings)
+            saveGlobalSettings();
         markStateDirty();
     }
 }
@@ -237,7 +238,8 @@ void SuperVelocityCurveAudioProcessor::processBlock (juce::AudioBuffer<float>& b
             const int note = testNoteOffNote.exchange (-1);
             const int ch = testNoteOffChannel.load();
             if (note >= 0)
-                injectStandaloneMidi (juce::MidiMessage::noteOff (ch, note, static_cast<juce::uint8> (0)));
+                midiMessages.addEvent (juce::MidiMessage::noteOff (ch, note, static_cast<juce::uint8> (0)),
+                                       std::max (0, remaining - 1));
         }
         else
         {
