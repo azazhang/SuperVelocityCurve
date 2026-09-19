@@ -31,7 +31,7 @@ MidiRoutingPanel::MidiRoutingPanel()
     humanizeLabel.setText ("Humanize amount", juce::dontSendNotification);
     libraryLabel.setText ("Sample-library compensation", juce::dontSendNotification);
     libraryBlendLabel.setTooltip ("Blends a generic sample-library velocity curve in after your per-pad curves (0 = off, 1 = full). "
-                                  "Shapes for acoustic, electronic, or compressed VIs — not tied to any specific library.");
+                                  "Shapes for acoustic, electronic, or compressed VIs - not tied to any specific library.");
     humanizeSlider.setRange (0.0, 0.25, 0.001);
     libraryBlendSlider.setRange (0.0, 1.0, 0.01);
 

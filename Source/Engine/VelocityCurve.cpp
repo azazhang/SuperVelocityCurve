@@ -163,6 +163,7 @@ void VelocityCurve::rebuildLut()
     }
 
     previous = 0.0f;
+    midi2Lut.resize (static_cast<size_t> (midi2LutSize));
     for (int i = 0; i < midi2LutSize; ++i)
     {
         const auto input = static_cast<float> (i) / static_cast<float> (midi2LutSize - 1);

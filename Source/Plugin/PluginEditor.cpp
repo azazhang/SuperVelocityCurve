@@ -128,7 +128,7 @@ SuperVelocityCurveAudioProcessorEditor::SuperVelocityCurveAudioProcessorEditor (
         b->setMouseClickGrabsKeyboardFocus (false);
     }
 
-    undoCurveButton.setTooltip ("Undo last curve change (⌘Z / Ctrl+Z)");
+    undoCurveButton.setTooltip ("Undo last curve change (Cmd+Z / Ctrl+Z)");
     undoCurveButton.setEnabled (false);
     undoCurveButton.onClick = [this] { performCurveUndo(); };
 
@@ -464,7 +464,7 @@ SuperVelocityCurveAudioProcessorEditor::SuperVelocityCurveAudioProcessorEditor (
 
         syncCurveEditTargetUI();
         showStatus (curveEditor.getEditTarget() == CurveEditorComponent::EditTarget::aftertouch
-                        ? "Editing aftertouch curve — use the same button to return to velocity."
+                        ? "Editing aftertouch curve - use the same button to return to velocity."
                         : "Editing velocity curve.");
     };
 

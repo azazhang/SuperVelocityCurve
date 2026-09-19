@@ -469,12 +469,18 @@ static int testHumanUserWorkflowSimulation()
 
     // Step 6: Human uses context menu to copy curve from Pad 12 and paste to Pad 1
     std::cout << "  [SIM] Step 6: Human copies curve and pastes to Pad 1" << std::endl;
+    std::cout << "  [SIM] Step 6.1: onCopyCurveRequested (12)" << std::endl;
     grid->onCopyCurveRequested (12);
+    std::cout << "  [SIM] Step 6.2: getCanPasteCurve" << std::endl;
     EXPECT_TRUE (grid->getCanPasteCurve());
 
+    std::cout << "  [SIM] Step 6.3: onPasteCurveRequested (1)" << std::endl;
     grid->onPasteCurveRequested (1);
+    std::cout << "  [SIM] Step 6.4: verify control points size" << std::endl;
     EXPECT_TRUE (processor.getProfileStore().getActiveProfile().getPads()[1].curve.getControlPoints().size() == 3);
+    std::cout << "  [SIM] Step 6.5: verify control points output" << std::endl;
     EXPECT_TRUE (std::abs (processor.getProfileStore().getActiveProfile().getPads()[1].curve.getControlPoints()[1].output - 0.8f) < 0.001f);
+    std::cout << "  [SIM] Step 6.6: Step 6 complete" << std::endl;
 
     // Step 7: Human resets Pad 1 curve to linear
     std::cout << "  [SIM] Step 7: Human resets Pad 1 curve to linear" << std::endl;

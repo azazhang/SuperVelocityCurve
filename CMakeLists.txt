@@ -5,6 +5,11 @@ project(SuperVelocityCurve VERSION 0.2.29)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(MSVC)
+    add_compile_options(/utf-8)
+    add_link_options(/STACK:8388608)
+endif()
+
 # Post-build install to ~/Library/Audio/Plug-Ins is for local dev only — slows/hangs CI.
 if(DEFINED ENV{CI})
     set(SVC_COPY_PLUGIN_AFTER_BUILD FALSE)

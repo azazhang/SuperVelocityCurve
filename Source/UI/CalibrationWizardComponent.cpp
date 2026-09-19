@@ -71,7 +71,7 @@ juce::String CalibrationWizardComponent::instructionText() const
             return "Step 3/3: Hit with maximum accent force.";
         case Step::done:
             return hasValidHits() ? "Calibration complete. Preview below, then Apply."
-                                  : "Hits were too similar — Reset and try again with clearer soft / medium / hard strokes.";
+                                  : "Hits were too similar - Reset and try again with clearer soft / medium / hard strokes.";
     }
     return {};
 }

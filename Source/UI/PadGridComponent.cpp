@@ -301,7 +301,8 @@ void PadGridComponent::PadCanvas::mouseDown (const juce::MouseEvent& event)
         return;
     }
 
-    grabKeyboardFocus();
+    if (isShowing() || isOnDesktop())
+        grabKeyboardFocus();
 
     // Check Ghost Add Pad Slot click
     if (owner.ghostPadBounds().contains (pos))
@@ -943,7 +944,8 @@ void PadGridComponent::startInlineEditing (int padIndex)
     inlineEditor->setBounds (bounds.removeFromTop (bounds.getHeight() / 2));
     padCanvas.addAndMakeVisible (*inlineEditor);
     inlineEditor->toFront (true);
-    inlineEditor->grabKeyboardFocus();
+    if (inlineEditor->isShowing() || inlineEditor->isOnDesktop())
+        inlineEditor->grabKeyboardFocus();
 
     inlineEditor->onReturnKey = [this] { commitInlineEditing(); };
     inlineEditor->onEscapeKey = [this] { cancelInlineEditing(); };

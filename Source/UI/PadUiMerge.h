@@ -7,7 +7,7 @@ namespace svc::ui
 
 /** Curve editor owns control points; inspector owns metadata and floor/ceiling. */
 inline svc::ProfilePad mergePadFromCurveAndInspector (const svc::ProfilePad& curvePad,
-                                                      const svc::ProfilePad& inspectorPad) noexcept
+                                                      const svc::ProfilePad& inspectorPad)
 {
     auto pad = curvePad;
     pad.label = inspectorPad.label;

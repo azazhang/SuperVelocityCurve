@@ -477,7 +477,7 @@ void CurveEditorComponent::paint (juce::Graphics& g)
     g.setColour (juce::Colour (svc::ui::Theme::textPrimary()));
     g.setFont (svc::ui::Theme::sectionFont());
     const juce::String mode = editTarget == EditTarget::aftertouch ? "Aftertouch" : "Velocity";
-    const auto header = mode + " curve — " + currentPad.label;
+    const auto header = mode + " curve - " + currentPad.label;
     auto headerArea = getLocalBounds().removeFromTop (kCurveHeaderHeight).reduced (14, 6);
     g.drawFittedText (header, headerArea,
                       juce::Justification::centredLeft, 1);

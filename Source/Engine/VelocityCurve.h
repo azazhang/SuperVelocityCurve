@@ -49,7 +49,7 @@ public:
     int mapMidi2 (int input) const noexcept;
 
     const std::array<float, midi1LutSize>& getLut() const noexcept { return midi1Lut; }
-    const std::array<float, midi2LutSize>& getMidi2Lut() const noexcept { return midi2Lut; }
+    const std::vector<float>& getMidi2Lut() const noexcept { return midi2Lut; }
 
     static std::vector<CurveControlPoint> makePresetPoints (CurvePreset preset);
     static void enforceMonotonicOutputs (std::vector<CurveControlPoint>& points);
@@ -58,7 +58,7 @@ public:
 private:
     std::vector<CurveControlPoint> controlPoints;
     std::array<float, midi1LutSize> midi1Lut {};
-    std::array<float, midi2LutSize> midi2Lut {};
+    std::vector<float> midi2Lut;
     float floor = 0.0f;
     float ceiling = 1.0f;
 
